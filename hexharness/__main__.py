@@ -109,14 +109,23 @@ def _parser() -> argparse.ArgumentParser:
     i.add_argument("--task", default=None, help="first task to run once the engagement is activated")
     i.add_argument("--out", default="engagements", help="directory to write the engagement file into")
     _common(i)
+
+    t = sub.add_parser("tui", help="launch the terminal UI")
+    t.add_argument("--engagement", default="engagements/example.engagement.yaml")
     return p
 
 
 def main() -> int:
     argv = sys.argv[1:]
-    if argv and argv[0] not in ("run", "init", "-h", "--help"):
+    if argv and argv[0] not in ("run", "init", "tui", "-h", "--help"):
         argv = ["run", *argv]  # back-compat: bare prompt => run
     args = _parser().parse_args(argv)
+
+    if args.cmd == "tui":
+        from hexharness.tui.app import HexTUI  # textual only imported here
+
+        HexTUI(engagement=args.engagement).run()
+        return 0
 
     coro = _init(args) if args.cmd == "init" else _run(args)
     try:

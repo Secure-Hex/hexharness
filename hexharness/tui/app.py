@@ -1,0 +1,231 @@
+"""HexTUI — an OpenCode-styled Textual front-end for the HexHarness engine.
+
+Layout: a one-line header, a big scrolling transcript, a bordered prompt input, and a
+footer of keybinds. Submitting the prompt runs the agent loop in a worker while a bus
+subscriber streams colored control-plane events into the transcript live.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+from rich.text import Text
+from textual import on, work
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.widgets import Footer, Input, RichLog, Static
+
+from hexharness.control.policy import Autonomy, Mode, Phase
+from hexharness.engine import Engine
+from hexharness.events.types import Event, EventType
+from hexharness.tui.approver import TUIApprover
+from hexharness.tui.providers import build, entry, model_for, router_spec
+from hexharness.tui.screens import ProviderScreen
+
+DEFAULT_ENGAGEMENT = "engagements/example.engagement.yaml"
+
+# Mirrors styles.tcss so transcript lines match the theme.
+_ACCENT = "#d9894f"
+_SUCCESS = "#7fb069"
+_DANGER = "#d9534f"
+_WARNING = "#e0b54a"
+_MUTED = "#6e6e7e"
+_TEXT = "#c8c8d0"
+
+
+class HexHeader(Static):
+    """One-line status bar: engagement · provider/model · autonomy/phase · budget."""
+
+
+class HexTUI(App):
+    CSS_PATH = "styles.tcss"
+    TITLE = "HexHarness"
+    ENABLE_COMMAND_PALETTE = False  # free ctrl+p for the provider screen
+
+    BINDINGS = [
+        Binding("ctrl+p", "providers", "Providers"),
+        Binding("ctrl+k", "kill", "Kill switch"),
+        Binding("ctrl+l", "clear", "Clear"),
+        Binding("f2", "cycle_autonomy", "Autonomy"),
+        Binding("f3", "cycle_phase", "Phase"),
+        Binding("ctrl+q", "quit", "Quit"),
+        Binding("ctrl+c", "quit", "Quit", show=False),
+    ]
+
+    def __init__(self, *, engagement: str | Path = DEFAULT_ENGAGEMENT) -> None:
+        super().__init__()
+        self.engagement_path = str(engagement)
+        self.mode = Mode(autonomy=Autonomy.INTERACTIVE, phase=Phase.RECON)
+        self.engine: Engine | None = None
+        self.loop = None
+        self._selection = {"kind": "provider", "keys": ["anthropic"], "model": ""}
+        self._tokens = 0
+        self._usd = 0.0
+
+    # --- layout ---
+
+    def compose(self) -> ComposeResult:
+        yield HexHeader(id="header")
+        yield RichLog(id="transcript", wrap=True, markup=False, highlight=False)
+        yield Input(placeholder="Describe a task…  (Enter to run, Ctrl+P providers)", id="prompt")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._sync_header()
+        self.query_one("#prompt", Input).focus()
+        self._log("HexHarness ready. Ctrl+P to pick a provider, then type a task.", _MUTED)
+
+    # --- header ---
+
+    def _provider_model(self) -> tuple[str, str]:
+        if self._selection["kind"] == "router":
+            return "router(" + "+".join(self._selection["keys"]) + ")", "auto"
+        e = entry(self._selection["keys"][0])
+        return e.key, (self._selection.get("model") or model_for(e))
+
+    def _sync_header(self) -> None:
+        eng = self.engine.engagement.name if self.engine else Path(self.engagement_path).stem
+        provider, model = self._provider_model()
+        parts = [
+            "HexHarness",
+            eng,
+            f"{provider}/{model}",
+            f"{self.mode.autonomy.name.lower()}/{self.mode.phase.name.lower()}",
+        ]
+        if self._tokens or self._usd:
+            parts.append(f"{self._tokens:,} tok  ${self._usd:.4f}")
+        self.query_one("#header", HexHeader).update("  ·  ".join(parts))
+
+    # --- transcript ---
+
+    def _log(self, text: str, style: str = _TEXT) -> None:
+        self.query_one("#transcript", RichLog).write(Text(text, style=style))
+
+    def _model_override(self) -> str | None:
+        if self._selection["kind"] == "router":
+            return None
+        return self._selection.get("model") or None
+
+    # --- engine lifecycle ---
+
+    def _make_provider(self):
+        if self._selection["kind"] == "router":
+            return router_spec([entry(k) for k in self._selection["keys"]])
+        e = entry(self._selection["keys"][0])
+        return build(e, model=self._selection.get("model") or None)
+
+    def _ensure_engine(self) -> None:
+        if self.engine is not None:
+            return
+        provider = self._make_provider()  # may raise RuntimeError if a key is missing
+        self.engine = Engine.from_engagement(
+            self.engagement_path, provider=provider, requested_mode=self.mode,
+            approver=TUIApprover(self),
+        )
+        self.engine.events._bus.subscribe(self._on_event)
+        self.loop = self.engine.loop(provider=provider, model=self._model_override())
+        self._sync_header()
+
+    # --- running ---
+
+    @on(Input.Submitted, "#prompt")
+    def _submit(self, event: Input.Submitted) -> None:
+        prompt = event.value.strip()
+        if not prompt:
+            return
+        event.input.value = ""
+        self._run(prompt)
+
+    @work(exclusive=True)
+    async def _run(self, prompt: str) -> None:
+        box = self.query_one("#prompt", Input)
+        box.disabled = True
+        self._log(f"❯ {prompt}", _ACCENT)
+        try:
+            self._ensure_engine()
+            result = await self.loop.run(prompt)
+            self._log(result or "(no output)", _TEXT)
+        except RuntimeError as exc:
+            # Most likely a missing API key — point the operator at the provider screen.
+            self._log(f"provider error: {exc}  (Ctrl+P to configure)", _DANGER)
+            self.engine = None
+        except Exception as exc:  # noqa: BLE001 — surface, never crash the UI
+            self._log(f"error: {exc}", _DANGER)
+        finally:
+            box.disabled = False
+            box.focus()
+
+    def _on_event(self, event: Event) -> None:
+        """Bus subscriber — runs on the app loop, so writing widgets here is safe."""
+        p = event.payload
+        t = event.type
+        if t is EventType.AUTHORIZE_DECISION:
+            effect = str(p.get("effect", "")).lower()
+            style = {"allow": _SUCCESS, "deny": _DANGER, "ask": _WARNING}.get(effect, _TEXT)
+            tgt = f" {p.get('target')}" if p.get("target") else ""
+            self._log(f"{effect.upper():5} {p.get('tool')} ({p.get('risk')}){tgt} — "
+                      f"{p.get('gate')}: {p.get('reason')}", style)
+        elif t is EventType.TOOL_STARTED:
+            self._log(f"→ {p.get('tool')} {p.get('input', {})}", _MUTED)
+        elif t is EventType.TOOL_FINISHED:
+            mark = "✓" if p.get("ok") else "✗"
+            extra = "" if p.get("ok") else f" — {p.get('error', '')}"
+            self._log(f"{mark} {p.get('tool')}{extra}", _MUTED)
+        elif t is EventType.MODEL_RESPONSE:
+            self._log(f"· model ({p.get('tokens', 0)} tok, {p.get('stop_reason')})", _MUTED)
+        elif t is EventType.FINDING_CANDIDATE:
+            self._log(f"finding candidate: {p}", _WARNING)
+        elif t is EventType.FINDING_CONFIRMED:
+            self._log(f"finding confirmed: {p}", _SUCCESS)
+        elif t is EventType.FINDING_REJECTED:
+            self._log(f"finding rejected: {p}", _MUTED)
+        elif t is EventType.BUDGET_UPDATED:
+            self._tokens = p.get("tokens_used", self._tokens)
+            self._usd = p.get("usd_used", self._usd)
+            self._sync_header()
+        elif t is EventType.KILL_REQUESTED:
+            self._log(f"KILL requested: {p.get('reason', '')}", _DANGER)
+        elif t in (EventType.DELEGATION_STARTED, EventType.DELEGATION_FINISHED):
+            self._log(f"{t.name.lower()}: {p}", _MUTED)
+        elif t is EventType.CHECKPOINT:
+            self._log(f"checkpoint: {p.get('reason', '')}", _MUTED)
+
+    # --- actions ---
+
+    @work
+    async def action_providers(self) -> None:
+        result = await self.push_screen_wait(ProviderScreen())
+        if not result:
+            return
+        self._selection = result
+        self.engine = None  # rebuild with the new provider on the next run
+        self.loop = None
+        self._sync_header()
+        self._log(f"provider set: {self._provider_model()[0]}", _MUTED)
+
+    async def action_kill(self) -> None:
+        if self.engine is None:
+            self._log("kill switch: no engine running", _MUTED)
+            return
+        await self.engine.kill_switch.trigger("tui kill switch")
+        self._log("kill switch triggered — run will stop at its next boundary", _DANGER)
+
+    def action_clear(self) -> None:
+        self.query_one("#transcript", RichLog).clear()
+
+    def action_cycle_autonomy(self) -> None:
+        members = list(Autonomy)
+        nxt = members[(members.index(self.mode.autonomy) + 1) % len(members)]
+        self.mode = Mode(autonomy=nxt, phase=self.mode.phase)
+        self._reset_mode()
+
+    def action_cycle_phase(self) -> None:
+        members = list(Phase)
+        nxt = members[(members.index(self.mode.phase) + 1) % len(members)]
+        self.mode = Mode(autonomy=self.mode.autonomy, phase=nxt)
+        self._reset_mode()
+
+    def _reset_mode(self) -> None:
+        # Mode is baked into ExecContext at assembly, so drop the engine to apply it next run.
+        self.engine = None
+        self.loop = None
+        self._sync_header()

@@ -1,0 +1,148 @@
+/* HexHarness TUI — OpenCode-like: dark, minimal chrome, one warm accent.
+   Palette is declared as variables up top so the whole theme is swappable. */
+
+$hh-background: #0d0d12;
+$hh-panel: #16161d;
+$hh-border: #2a2a34;
+$hh-text: #c8c8d0;
+$hh-muted: #6e6e7e;
+$hh-accent: #d9894f;
+$hh-success: #7fb069;
+$hh-danger: #d9534f;
+$hh-warning: #e0b54a;
+
+Screen {
+    background: $hh-background;
+    color: $hh-text;
+    layout: vertical;
+}
+
+/* thin header */
+#header {
+    dock: top;
+    height: 1;
+    padding: 0 1;
+    background: $hh-panel;
+    color: $hh-muted;
+}
+
+/* big transcript pane */
+#transcript {
+    height: 1fr;
+    background: $hh-background;
+    color: $hh-text;
+    padding: 1 2;
+    scrollbar-color: $hh-border;
+    scrollbar-background: $hh-background;
+}
+
+/* bordered prompt box, accent when focused */
+#prompt {
+    dock: bottom;
+    margin: 1 2;
+    padding: 0 1;
+    background: $hh-panel;
+    color: $hh-text;
+    border: round $hh-border;
+}
+#prompt:focus {
+    border: round $hh-accent;
+}
+#prompt:disabled {
+    color: $hh-muted;
+}
+
+Footer {
+    background: $hh-panel;
+    color: $hh-muted;
+}
+Footer > .footer--key {
+    color: $hh-accent;
+    background: $hh-panel;
+}
+
+/* --- modal: provider screen --- */
+ProviderScreen {
+    align: center middle;
+}
+#provider-panel {
+    width: 80;
+    max-width: 90%;
+    height: auto;
+    max-height: 90%;
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-accent;
+}
+#provider-title {
+    color: $hh-accent;
+    padding-bottom: 1;
+}
+#prov-list {
+    height: auto;
+    max-height: 12;
+    background: $hh-background;
+    border: round $hh-border;
+    margin-bottom: 1;
+}
+#prov-list > ListItem {
+    background: $hh-background;
+    color: $hh-text;
+    padding: 0 1;
+}
+#prov-list > ListItem.--highlight {
+    background: $hh-border;
+    color: $hh-accent;
+}
+#router-list {
+    height: auto;
+    max-height: 7;
+    background: $hh-background;
+    border: round $hh-border;
+    margin-bottom: 1;
+}
+#model-input, #secret-input {
+    background: $hh-background;
+    border: round $hh-border;
+    margin-bottom: 1;
+}
+#model-input:focus, #secret-input:focus {
+    border: round $hh-accent;
+}
+#register-row, #provider-buttons, #approval-buttons {
+    height: auto;
+    align-horizontal: left;
+}
+#provider-buttons {
+    padding-top: 1;
+}
+
+/* --- modal: approval --- */
+ApprovalModal {
+    align: center middle;
+}
+#approval-panel {
+    width: 70;
+    max-width: 90%;
+    height: auto;
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-warning;
+}
+#approval-title {
+    color: $hh-warning;
+    padding-bottom: 1;
+}
+#approval-body {
+    height: auto;
+    max-height: 10;
+    padding-bottom: 1;
+}
+
+Button {
+    margin-right: 2;
+}
+
+.dim {
+    color: $hh-muted;
+}
