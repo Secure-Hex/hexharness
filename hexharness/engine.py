@@ -23,7 +23,8 @@ from hexharness.tools.native import CweLookupTool, DnsLookupTool, PortScanTool
 from hexharness.tools.registry import ToolRegistry
 
 
-def default_registry(*, vault=None, secret_requester=None, workspace: str | Path | None = None) -> ToolRegistry:
+def default_registry(*, vault=None, secret_requester=None, workspace: str | Path | None = None,
+                     evidence=None) -> ToolRegistry:
     from pathlib import Path
 
     from hexharness.control.secrets import DenySecretRequester
@@ -51,6 +52,10 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(SkillLookupTool(skills))
     # OSINT web search (ACTIVE, not scope-sensitive): free ddgs default, paid keys via vault
     reg.register(WebSearchTool(vault))
+    if evidence is not None:
+        from hexharness.tools.native.evidence_tools import RecordFindingTool
+
+        reg.register(RecordFindingTool(evidence))  # agent logs findings as CANDIDATE
     # file / code I/O, workspace-confined (write gated: INTRUSIVE + approval)
     reg.register(FileReadTool(workspace))
     reg.register(FileWriteTool(workspace))
@@ -148,7 +153,7 @@ class Engine:
         slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in eng.name.lower())
         workspace = Path(".hexharness") / slug / "workspace"
         reg = registry if registry is not None else default_registry(
-            vault=vault, secret_requester=secret_requester, workspace=workspace,
+            vault=vault, secret_requester=secret_requester, workspace=workspace, evidence=evidence,
         )
         return cls(
             engagement=eng, events=events, evidence=evidence, control=control,
