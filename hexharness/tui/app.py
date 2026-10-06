@@ -18,8 +18,9 @@ from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.engine import Engine
 from hexharness.events.types import Event, EventType
 from hexharness.tui.approver import TUIApprover, TUISecretRequester
+from hexharness.tui import providers
 from hexharness.tui.providers import build, entry, model_for, router_spec
-from hexharness.tui.screens import CapabilitiesScreen, ProviderScreen
+from hexharness.tui.screens import CapabilitiesScreen, ModeScreen, ProviderScreen
 
 DEFAULT_ENGAGEMENT = "engagements/example.engagement.yaml"
 
@@ -46,8 +47,9 @@ class HexTUI(App):
         Binding("ctrl+t", "capabilities", "Capabilities"),
         Binding("ctrl+k", "kill", "Kill switch"),
         Binding("ctrl+l", "clear", "Clear"),
-        Binding("f2", "cycle_autonomy", "Autonomy"),
-        Binding("f3", "cycle_phase", "Phase"),
+        Binding("ctrl+o", "mode", "Mode"),
+        Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
+        Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
         Binding("ctrl+q", "quit", "Quit"),
         Binding("ctrl+c", "quit", "Quit", show=False),
     ]
@@ -83,6 +85,9 @@ class HexTUI(App):
     def _provider_model(self) -> tuple[str, str]:
         if self._selection["kind"] == "router":
             return "router(" + "+".join(self._selection["keys"]) + ")", "auto"
+        if self._selection["kind"] == "custom":
+            p = self._selection["params"]
+            return p["name"] or "custom", p["model"]
         e = entry(self._selection["keys"][0])
         return e.key, (self._selection.get("model") or model_for(e))
 
@@ -107,6 +112,8 @@ class HexTUI(App):
     def _model_override(self) -> str | None:
         if self._selection["kind"] == "router":
             return None
+        if self._selection["kind"] == "custom":
+            return self._selection["params"].get("model") or None
         return self._selection.get("model") or None
 
     # --- engine lifecycle ---
@@ -114,6 +121,10 @@ class HexTUI(App):
     def _make_provider(self):
         if self._selection["kind"] == "router":
             return router_spec([entry(k) for k in self._selection["keys"]])
+        if self._selection["kind"] == "custom":
+            # ponytail: api_key is passed straight through from the in-memory selection,
+            # never via os.environ — build_custom hands it directly to the provider.
+            return providers.build_custom(**self._selection["params"])
         e = entry(self._selection["keys"][0])
         return build(e, model=self._selection.get("model") or None)
 
@@ -226,6 +237,15 @@ class HexTUI(App):
         self.loop = None
         self._sync_header()
         self._log(f"provider set: {self._provider_model()[0]}", _MUTED)
+
+    @work
+    async def action_mode(self) -> None:
+        result = await self.push_screen_wait(ModeScreen(mode=self.mode))
+        if result is None:
+            return
+        self.mode = result
+        self._reset_mode()  # drop the engine so the next run rebuilds with the new mode
+        self._log(f"mode set: {self.mode.autonomy.name.lower()}/{self.mode.phase.name.lower()}", _MUTED)
 
     @work
     async def action_capabilities(self) -> None:

@@ -117,6 +117,72 @@ ProviderScreen {
     padding-top: 1;
 }
 
+/* --- modal: custom (bring-your-own) provider --- */
+CustomProviderModal {
+    align: center middle;
+}
+#custom-panel {
+    width: 70;
+    max-width: 90%;
+    height: auto;
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-accent;
+}
+#custom-title {
+    color: $hh-accent;
+    padding-bottom: 1;
+}
+#custom-name, #custom-base-url, #custom-model, #custom-api-key {
+    background: $hh-background;
+    border: round $hh-border;
+    margin-bottom: 1;
+}
+#custom-name:focus, #custom-base-url:focus, #custom-model:focus, #custom-api-key:focus {
+    border: round $hh-accent;
+}
+#custom-buttons {
+    height: auto;
+    align-horizontal: left;
+}
+
+/* --- modal: mode (autonomy + phase) --- */
+ModeScreen {
+    align: center middle;
+}
+#mode-panel {
+    width: 70;
+    max-width: 90%;
+    height: auto;
+    max-height: 90%;
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-accent;
+}
+#mode-title {
+    color: $hh-accent;
+    padding-bottom: 1;
+}
+#mode-lists {
+    height: auto;
+}
+.mode-col {
+    width: 1fr;
+    height: auto;
+}
+#mode-autonomy, #mode-phase {
+    height: auto;
+    max-height: 9;
+    background: $hh-background;
+    border: round $hh-border;
+    margin: 0 1 1 0;
+}
+#mode-buttons {
+    height: auto;
+    align-horizontal: left;
+    padding-top: 1;
+}
+
 /* --- modal: approval --- */
 ApprovalModal {
     align: center middle;

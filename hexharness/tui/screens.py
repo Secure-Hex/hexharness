@@ -5,12 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from textual import on
+from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, ListItem, ListView, SelectionList, Static
 
+from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.tui.providers import CATALOG, ProviderEntry, detect, model_for, register
 
 # Skills live next to the package: hexharness/skills/library.
@@ -61,6 +62,7 @@ class ProviderScreen(ModalScreen[dict]):
             with Horizontal(id="provider-buttons"):
                 yield Button("Use provider", variant="primary", id="use-btn")
                 yield Button("Build router", id="router-btn")
+                yield Button("＋ Custom (OpenAI-compatible)", id="custom-btn")
                 yield Button("Cancel", id="cancel-btn")
 
     def on_mount(self) -> None:
@@ -127,8 +129,112 @@ class ProviderScreen(ModalScreen[dict]):
             return
         self.dismiss({"kind": "router", "keys": list(self._router_order), "model": ""})
 
+    @on(Button.Pressed, "#custom-btn")
+    @work
+    async def _open_custom(self) -> None:
+        # Pass the custom selection straight through; the api_key rides inside it and is
+        # never written to env here (build_custom hands it directly to the provider).
+        result = await self.app.push_screen_wait(CustomProviderModal())
+        if result:
+            self.dismiss(result)
+
     @on(Button.Pressed, "#cancel-btn")
     def _cancel(self) -> None:
+        self.dismiss(None)
+
+
+class CustomProviderModal(ModalScreen[dict]):
+    """Bring-your-own OpenAI-compatible provider. Collects name / base_url / model and a
+    MASKED api_key, and returns the app's selection dict:
+      {"kind": "custom", "params": {"name":…, "base_url":…, "model":…, "api_key":…}}
+    or None on cancel.
+
+    # ponytail: the api_key lives ONLY in this in-memory selection — never written to env,
+    # never logged, never shown after entry. build_custom passes it straight to the provider
+    # (not via os.environ), so no persistence/validation layer is warranted here.
+    """
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="custom-panel"):
+            yield Static("Custom provider (OpenAI-compatible)", id="custom-title")
+            yield Static(
+                "The API key stays local for this session only — it never reaches the model.",
+                classes="dim",
+            )
+            yield Input(placeholder="name (e.g. my-gateway)", id="custom-name")
+            yield Input(placeholder="base_url (e.g. https://host/v1)", id="custom-base-url")
+            yield Input(placeholder="model", id="custom-model")
+            yield Input(password=True, placeholder="API key (kept local, never logged)",
+                        id="custom-api-key")
+            with Horizontal(id="custom-buttons"):
+                yield Button("Use provider", variant="primary", id="custom-submit-btn")
+                yield Button("Cancel", variant="error", id="custom-cancel-btn")
+
+    def on_mount(self) -> None:
+        self.query_one("#custom-name", Input).focus()
+
+    @on(Input.Submitted)
+    @on(Button.Pressed, "#custom-submit-btn")
+    def action_submit(self) -> None:
+        params = {
+            "name": self.query_one("#custom-name", Input).value.strip(),
+            "base_url": self.query_one("#custom-base-url", Input).value.strip(),
+            "model": self.query_one("#custom-model", Input).value.strip(),
+            "api_key": self.query_one("#custom-api-key", Input).value,  # raw: never stripped/logged
+        }
+        self.dismiss({"kind": "custom", "params": params})
+
+    @on(Button.Pressed, "#custom-cancel-btn")
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class ModeScreen(ModalScreen[Mode]):
+    """Pick Autonomy + Phase from menus. A reliable alternative to the f2/f3 cycles that
+    terminals/multiplexers often swallow. Enter / Set mode returns the chosen Mode; Esc
+    cancels. Current values are preselected."""
+
+    BINDINGS = [("escape", "dismiss", "Close")]
+
+    def __init__(self, *, mode: Mode) -> None:
+        super().__init__()
+        self._mode = mode
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="mode-panel"):
+            yield Static("Mode  ·  autonomy + phase", id="mode-title")
+            with Horizontal(id="mode-lists"):
+                with Vertical(classes="mode-col"):
+                    yield Static("Autonomy", classes="cap-section")
+                    yield ListView(
+                        *[ListItem(Label(a.name.lower()), id=f"aut-{a.name}") for a in Autonomy],
+                        id="mode-autonomy",
+                    )
+                with Vertical(classes="mode-col"):
+                    yield Static("Phase", classes="cap-section")
+                    yield ListView(
+                        *[ListItem(Label(p.name.lower()), id=f"pha-{p.name}") for p in Phase],
+                        id="mode-phase",
+                    )
+            with Horizontal(id="mode-buttons"):
+                yield Button("Set mode", variant="primary", id="mode-submit-btn")
+                yield Button("Cancel", id="mode-cancel-btn")
+
+    def on_mount(self) -> None:
+        self.query_one("#mode-autonomy", ListView).index = list(Autonomy).index(self._mode.autonomy)
+        self.query_one("#mode-phase", ListView).index = list(Phase).index(self._mode.phase)
+
+    @on(ListView.Selected)
+    @on(Button.Pressed, "#mode-submit-btn")
+    def action_submit(self) -> None:
+        a = list(Autonomy)[self.query_one("#mode-autonomy", ListView).index or 0]
+        p = list(Phase)[self.query_one("#mode-phase", ListView).index or 0]
+        self.dismiss(Mode(autonomy=a, phase=p))
+
+    @on(Button.Pressed, "#mode-cancel-btn")
+    def action_cancel(self) -> None:
         self.dismiss(None)
 
 
