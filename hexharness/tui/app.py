@@ -110,6 +110,12 @@ class HexTUI(App):
         ]
         if self._tokens or self._usd:
             parts.append(f"{self._tokens:,} tok  ${self._usd:.4f}")
+        if self.loop is not None and self.loop.last_input_tokens:
+            from hexharness.providers.context_window import window_for
+
+            used = self.loop.last_input_tokens
+            win = window_for(self.loop._model_id())
+            parts.append(f"ctx {used // 1000}k/{win // 1000}k  {used / win:.0%}")
         self.query_one("#header", HexHeader).update("  ·  ".join(parts))
 
     # --- transcript ---
@@ -182,6 +188,10 @@ class HexTUI(App):
             return
         self.query_one("#prompt", PromptArea).text = ""
 
+        if prompt in ("/compact", "/compact "):
+            self._compact()
+            return
+
         reg = self._skill_registry()
         if is_list_request(prompt):
             names = list_skills(reg)
@@ -196,6 +206,16 @@ class HexTUI(App):
         if used:
             self._log(f"using skill /{used}", _MUTED)
         self._run(prompt)
+
+    @work(exclusive=True, group="compact")
+    async def _compact(self) -> None:
+        if self.loop is None:
+            self._log("nothing to compact yet — run a task first", _MUTED)
+            return
+        collapsed = await self.loop.compact(reason="manual")
+        self._log(f"compacted {collapsed} messages into a summary" if collapsed
+                  else "nothing to compact", _MUTED)
+        self._sync_header()
 
     @work(exclusive=True)
     async def _run(self, prompt: str) -> None:
@@ -251,6 +271,9 @@ class HexTUI(App):
             self._tokens = p.get("tokens_used", self._tokens)
             self._usd = p.get("usd_used", self._usd)
             self._sync_header()
+        elif t is EventType.CONTEXT_COMPACTED:
+            self._log(f"context compacted ({p.get('reason')}): "
+                      f"{p.get('messages_before')}→{p.get('messages_after')} messages", _WARNING)
         elif t is EventType.KILL_REQUESTED:
             self._log(f"KILL requested: {p.get('reason', '')}", _DANGER)
         elif t in (EventType.DELEGATION_STARTED, EventType.DELEGATION_FINISHED):
