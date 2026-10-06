@@ -25,8 +25,14 @@ class FakeProvider:
         system: str | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
+        on_text=None,
     ) -> ModelResponse:
         self.calls.append(list(messages))
         if not self._scripted:
             raise AssertionError("FakeProvider ran out of scripted responses")
-        return self._scripted.pop(0)
+        resp = self._scripted.pop(0)
+        if on_text is not None:
+            text = resp.text()
+            if text:
+                on_text(text)  # single synthetic delta — deterministic for tests
+        return resp

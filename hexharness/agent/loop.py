@@ -41,6 +41,7 @@ class AgentLoop:
         model: str | None = None,
         max_iterations: int = 12,
         kill_switch=None,
+        on_text=None,
     ):
         self.provider = provider
         self.control = control
@@ -51,6 +52,7 @@ class AgentLoop:
         self.model = model
         self.max_iterations = max_iterations
         self.kill_switch = kill_switch
+        self.on_text = on_text
 
     async def run(self, user_prompt: str) -> str:
         await self.events.append(EventType.USER_PROMPT, {"text": user_prompt, "subagent": self.ctx.subagent_id})
@@ -61,7 +63,8 @@ class AgentLoop:
                 return f"[killed: {self.kill_switch.reason}]"
 
             resp = await self.provider.complete(
-                messages, tools=self.registry.specs(), system=self.system, model=self.model
+                messages, tools=self.registry.specs(), system=self.system, model=self.model,
+                on_text=self.on_text,
             )
             self.control.budget.add_tokens(resp.usage.total_tokens)
             self.control.budget.add_usd(usd_cost(resp.model or self.model or "", resp.usage))

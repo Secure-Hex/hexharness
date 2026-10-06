@@ -60,12 +60,15 @@ class HexTUI(App):
         self._selection = {"kind": "provider", "keys": ["anthropic"], "model": ""}
         self._tokens = 0
         self._usd = 0.0
+        self._live_buf = ""       # accumulating streamed text for the current model turn
+        self._streamed = False    # did any text stream this run? (non-streaming providers: no)
 
     # --- layout ---
 
     def compose(self) -> ComposeResult:
         yield HexHeader(id="header")
         yield RichLog(id="transcript", wrap=True, markup=False, highlight=False)
+        yield Static("", id="live")  # live-streaming model text for the current turn
         yield Input(placeholder="Describe a task…  (Enter to run, Ctrl+P providers)", id="prompt")
         yield Footer()
 
@@ -122,8 +125,22 @@ class HexTUI(App):
             approver=TUIApprover(self),
         )
         self.engine.events._bus.subscribe(self._on_event)
-        self.loop = self.engine.loop(provider=provider, model=self._model_override())
+        self.loop = self.engine.loop(provider=provider, model=self._model_override(),
+                                     on_text=self._stream_text)
         self._sync_header()
+
+    def _stream_text(self, delta: str) -> None:
+        """Token sink (runs on the app loop). Grow the live line; it's flushed into the
+        transcript permanently when the turn's MODEL_RESPONSE event arrives."""
+        self._streamed = True
+        self._live_buf += delta
+        self.query_one("#live", Static).update(Text(self._live_buf, style=_TEXT))
+
+    def _flush_live(self) -> None:
+        if self._live_buf:
+            self._log(self._live_buf, _TEXT)
+            self._live_buf = ""
+            self.query_one("#live", Static).update("")
 
     # --- running ---
 
@@ -140,10 +157,16 @@ class HexTUI(App):
         box = self.query_one("#prompt", Input)
         box.disabled = True
         self._log(f"❯ {prompt}", _ACCENT)
+        self._live_buf = ""
+        self._streamed = False
         try:
             self._ensure_engine()
             result = await self.loop.run(prompt)
-            self._log(result or "(no output)", _TEXT)
+            self._flush_live()
+            # Streaming already showed every turn's text; only write the return value
+            # when nothing streamed (e.g. a provider that doesn't support on_text yet).
+            if not self._streamed:
+                self._log(result or "(no output)", _TEXT)
         except RuntimeError as exc:
             # Most likely a missing API key — point the operator at the provider screen.
             self._log(f"provider error: {exc}  (Ctrl+P to configure)", _DANGER)
@@ -171,6 +194,7 @@ class HexTUI(App):
             extra = "" if p.get("ok") else f" — {p.get('error', '')}"
             self._log(f"{mark} {p.get('tool')}{extra}", _MUTED)
         elif t is EventType.MODEL_RESPONSE:
+            self._flush_live()  # streamed text for this turn becomes a permanent line
             self._log(f"· model ({p.get('tokens', 0)} tok, {p.get('stop_reason')})", _MUTED)
         elif t is EventType.FINDING_CANDIDATE:
             self._log(f"finding candidate: {p}", _WARNING)

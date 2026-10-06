@@ -90,6 +90,7 @@ class AnthropicProvider:
         system: str | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
+        on_text=None,
     ) -> ModelResponse:
         kwargs: dict[str, Any] = {
             "model": model or self.default_model,
@@ -103,5 +104,12 @@ class AnthropicProvider:
                 {"name": t.name, "description": t.description, "input_schema": t.input_schema}
                 for t in tools
             ]
+        if on_text is not None:
+            # Stream text deltas to the sink; still return the full mapped response.
+            async with self._client.messages.stream(**kwargs) as stream:
+                async for delta in stream.text_stream:
+                    on_text(delta)
+                final = await stream.get_final_message()
+            return from_api_response(final)
         resp = await self._client.messages.create(**kwargs)
         return from_api_response(resp)

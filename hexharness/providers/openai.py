@@ -125,6 +125,7 @@ class OpenAIProvider:
         system: str | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
+        on_text=None,  # ponytail: accepted for the LLMProvider contract; real streaming is a TODO
     ) -> ModelResponse:
         kwargs: dict[str, Any] = {
             "model": model or self.default_model,

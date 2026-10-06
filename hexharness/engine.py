@@ -122,8 +122,9 @@ class Engine:
         )
         return self
 
-    def loop(self, *, provider: LLMProvider, model: str | None = None) -> AgentLoop:
+    def loop(self, *, provider: LLMProvider, model: str | None = None, on_text=None) -> AgentLoop:
         return AgentLoop(
             provider=provider, control=self.control, registry=self.registry,
             events=self.events, ctx=self.ctx, model=model, kill_switch=self.kill_switch,
+            on_text=on_text,
         )
