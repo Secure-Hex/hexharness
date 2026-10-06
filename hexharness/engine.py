@@ -23,7 +23,7 @@ from hexharness.tools.native import CweLookupTool, DnsLookupTool, PortScanTool
 from hexharness.tools.registry import ToolRegistry
 
 
-def default_registry() -> ToolRegistry:
+def default_registry(*, vault=None) -> ToolRegistry:
     from pathlib import Path
 
     from hexharness.knowledge import KnowledgeSearchTool, MitreAttackTool
@@ -48,6 +48,7 @@ class Engine:
     def __init__(
         self, *, engagement: Engagement, events: EventStore, evidence: EvidenceStore,
         control: ControlPlane, registry: ToolRegistry, ctx: ExecContext, kill_switch: KillSwitch,
+        vault=None,
     ):
         self.engagement = engagement
         self.events = events
@@ -56,17 +57,19 @@ class Engine:
         self.registry = registry
         self.ctx = ctx
         self.kill_switch = kill_switch
+        self.vault = vault
 
     @classmethod
     def from_engagement(
         cls, path: str | Path, *, provider: LLMProvider, requested_mode: Mode | None = None,
         approver: Approver | None = None, subagent: str = "main", db: str = ":memory:",
         registry: ToolRegistry | None = None, kill_trigger_file: str | Path | None = None,
+        vault=None, secret_requester=None,
     ) -> "Engine":
         return cls._assemble(
             Engagement.load(path), provider=provider, requested_mode=requested_mode,
             approver=approver, subagent=subagent, db=db, registry=registry,
-            kill_trigger_file=kill_trigger_file,
+            kill_trigger_file=kill_trigger_file, vault=vault, secret_requester=secret_requester,
         )
 
     @classmethod
@@ -95,8 +98,11 @@ class Engine:
     def _assemble(
         cls, eng: Engagement, *, provider: LLMProvider | None, requested_mode: Mode | None,
         approver: Approver | None, subagent: str, db: str, registry: ToolRegistry | None,
-        kill_trigger_file: str | Path | None,
+        kill_trigger_file: str | Path | None, vault=None, secret_requester=None,
     ) -> "Engine":
+        from hexharness.control.vault import Vault
+
+        vault = vault or Vault()
         bus = EventBus()
         # Tracing is a projection of the event stream: attach BEFORE the first append.
         # No-op if opentelemetry isn't installed; a broken tracer can't break the stream.
@@ -108,6 +114,7 @@ class Engine:
         control = ControlPlane(
             scope_guard=eng.scope_guard(), roe=eng.roe_policy(),
             budget=eng.budget_tracker(), events=events, approver=approver,
+            vault=vault, secret_requester=secret_requester,
         )
         mode = eng.clamp(requested_mode or Mode())  # active mode = min(requested, ROE)
         ctx = ExecContext(engagement_id=eng.name, subagent_id=subagent, mode=mode)
@@ -116,11 +123,11 @@ class Engine:
             await events.append(EventType.CHECKPOINT, {"reason": "kill-switch", "subagent": subagent})
 
         kill = KillSwitch(trigger_file=kill_trigger_file, checkpoint=_checkpoint)
-        self = cls(
+        reg = registry if registry is not None else default_registry(vault=vault)
+        return cls(
             engagement=eng, events=events, evidence=evidence, control=control,
-            registry=registry or default_registry(), ctx=ctx, kill_switch=kill,
+            registry=reg, ctx=ctx, kill_switch=kill, vault=vault,
         )
-        return self
 
     def loop(self, *, provider: LLMProvider, model: str | None = None, on_text=None) -> AgentLoop:
         return AgentLoop(

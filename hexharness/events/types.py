@@ -20,6 +20,7 @@ class EventType(str, Enum):
     FINDING_CONFIRMED = "evidence.finding_confirmed"
     FINDING_REJECTED = "evidence.finding_rejected"
     BUDGET_UPDATED = "control.budget_updated"
+    SECRET_PROVIDED = "control.secret_provided"  # name only — the value is never logged
     KILL_REQUESTED = "control.kill_requested"
     CHECKPOINT = "recovery.checkpoint"
     # Orchestrator-worker (phase 8): a subtask handed to / returned from a worker.

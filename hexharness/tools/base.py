@@ -31,6 +31,9 @@ class Tool(ABC):
     # Name of the input field that holds the scope target (host/ip/url). Required
     # when scope_sensitive is True so the Scope Guard knows what to check.
     target_field: str | None = None
+    # Secrets this tool needs present in the Vault before it may run. If one is missing,
+    # the control plane asks the operator out-of-band (never the model) and stores it.
+    required_secrets: list[str] = []
 
     def to_spec(self) -> ToolSpec:
         return ToolSpec(

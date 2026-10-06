@@ -17,6 +17,8 @@ from hexharness.control.decision import Decision, Effect
 from hexharness.control.hitl import Approver, DenyAllApprover
 from hexharness.control.roe import ROE
 from hexharness.control.scope_guard import ScopeGuard
+from hexharness.control.secrets import DenySecretRequester, SecretRequester
+from hexharness.control.vault import Vault
 from hexharness.events.store import EventStore
 from hexharness.events.types import EventType
 
@@ -34,12 +36,16 @@ class ControlPlane:
         budget: Budget,
         events: EventStore,
         approver: Approver | None = None,
+        vault: Vault | None = None,
+        secret_requester: SecretRequester | None = None,
     ):
         self.scope_guard = scope_guard
         self.roe = roe
         self.budget = budget
         self.events = events
         self.approver = approver or DenyAllApprover()
+        self.vault = vault or Vault()
+        self.secret_requester = secret_requester or DenySecretRequester()
 
     async def authorize(self, ctx: "ExecContext", tool: "Tool", tool_input: dict) -> Decision:
         target: str | None = None
@@ -80,6 +86,23 @@ class ControlPlane:
                     if ok
                     else Decision.deny("hitl", "not approved by human")
                 )
+
+            # SECRETS — resolve any the tool needs, out-of-band. The value never touches
+            # the model or the audit log; only the secret's name is recorded.
+            if decision.effect is not Effect.DENY and tool.required_secrets:
+                for name in tool.required_secrets:
+                    if self.vault.has(name):
+                        continue
+                    value = await self.secret_requester.request(
+                        name=name, reason=f"{tool.name} requires {name}"
+                    )
+                    if not value:
+                        decision = Decision.deny("secrets", f"missing secret {name}")
+                        break
+                    self.vault.set(name, value)
+                    await self.events.append(
+                        EventType.SECRET_PROVIDED, {"name": name, "tool": tool.name, "provided": True}
+                    )
 
             return await self._audit(ctx, tool, decision, target)
         except Exception as exc:  # noqa: BLE001 — fail-closed is the whole point
