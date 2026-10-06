@@ -1,0 +1,6 @@
+name: sqli-triage
+description: Confirm and triage a suspected SQL injection point safely, without destructive payloads.
+version: 0.1.0
+phase: webapp
+tags: [webapp, injection, cwe-89, exploitation]
+risk_hint: intrusive

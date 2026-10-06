@@ -1,0 +1,22 @@
+[
+  {"id": "T1059", "name": "Command and Scripting Interpreter", "tactic": "Execution", "description": "Adversaries abuse command and script interpreters (bash, PowerShell, cmd, Python) to execute commands, scripts, or binaries."},
+  {"id": "T1190", "name": "Exploit Public-Facing Application", "tactic": "Initial Access", "description": "Adversaries exploit a weakness in an Internet-facing host or application to gain initial access to a network."},
+  {"id": "T1078", "name": "Valid Accounts", "tactic": "Defense Evasion", "description": "Adversaries obtain and abuse credentials of existing accounts to gain access, persist, escalate, or evade defenses."},
+  {"id": "T1110", "name": "Brute Force", "tactic": "Credential Access", "description": "Adversaries guess passwords or keys through systematic trial, including password guessing, spraying, and credential stuffing."},
+  {"id": "T1046", "name": "Network Service Discovery", "tactic": "Discovery", "description": "Adversaries enumerate services running on remote hosts and network infrastructure, often via port and vulnerability scans."},
+  {"id": "T1071", "name": "Application Layer Protocol", "tactic": "Command and Control", "description": "Adversaries communicate with controlled systems using OSI application-layer protocols such as HTTP, DNS, or mail to blend with normal traffic."},
+  {"id": "T1021", "name": "Remote Services", "tactic": "Lateral Movement", "description": "Adversaries use valid accounts to log into remote services like SSH, RDP, SMB, or VNC and move laterally."},
+  {"id": "T1055", "name": "Process Injection", "tactic": "Defense Evasion", "description": "Adversaries inject code into live processes to evade process-based defenses and possibly elevate privileges."},
+  {"id": "T1003", "name": "OS Credential Dumping", "tactic": "Credential Access", "description": "Adversaries dump credential material such as account hashes from the OS, memory (LSASS), or the SAM/NTDS databases."},
+  {"id": "T1053", "name": "Scheduled Task/Job", "tactic": "Persistence", "description": "Adversaries abuse task scheduling (cron, at, schtasks, systemd timers) to run malicious code on a schedule or at startup."},
+  {"id": "T1548", "name": "Abuse Elevation Control Mechanism", "tactic": "Privilege Escalation", "description": "Adversaries bypass elevation controls such as sudo, setuid/setgid, or UAC to execute code with higher privileges."},
+  {"id": "T1068", "name": "Exploitation for Privilege Escalation", "tactic": "Privilege Escalation", "description": "Adversaries exploit software vulnerabilities, often kernel or driver flaws, to execute code with elevated privileges."},
+  {"id": "T1133", "name": "External Remote Services", "tactic": "Initial Access", "description": "Adversaries leverage external-facing remote services such as VPNs, Citrix, or RDP gateways to access a network."},
+  {"id": "T1566", "name": "Phishing", "tactic": "Initial Access", "description": "Adversaries send phishing messages with malicious attachments or links to gain access to victim systems."},
+  {"id": "T1105", "name": "Ingress Tool Transfer", "tactic": "Command and Control", "description": "Adversaries transfer tools or other files from an external system into a compromised environment."},
+  {"id": "T1082", "name": "System Information Discovery", "tactic": "Discovery", "description": "Adversaries gather detailed information about the operating system and hardware, including version, patches, and architecture."},
+  {"id": "T1057", "name": "Process Discovery", "tactic": "Discovery", "description": "Adversaries enumerate running processes to understand software and security tooling present on a host."},
+  {"id": "T1083", "name": "File and Directory Discovery", "tactic": "Discovery", "description": "Adversaries enumerate files and directories or search specific locations for information of interest."},
+  {"id": "T1518", "name": "Software Discovery", "tactic": "Discovery", "description": "Adversaries enumerate installed software and versions, including security software, to shape follow-on actions."},
+  {"id": "T1136", "name": "Create Account", "tactic": "Persistence", "description": "Adversaries create local, domain, or cloud accounts to maintain persistent access to a system or network."}
+]

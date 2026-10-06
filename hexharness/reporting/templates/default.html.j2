@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{{ engagement_name }} — Penetration Test Report</title>
+  <style>
+    body { font-family: "Helvetica Neue", Arial, sans-serif; color: #1a1a1a; margin: 2.5rem; }
+    h1 { font-size: 1.8rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.2rem; border-bottom: 1px solid #ccc; padding-bottom: 0.2rem; margin-top: 2rem; }
+    .meta { color: #555; font-size: 0.9rem; }
+    .counts { margin: 0.5rem 0; }
+    .counts span { display: inline-block; margin-right: 1rem; font-weight: 600; }
+    .finding { margin: 1rem 0; padding: 0.75rem 1rem; border-left: 4px solid #888; background: #fafafa; }
+    .sev-critical { border-color: #7b1fa2; }
+    .sev-high { border-color: #c62828; }
+    .sev-medium { border-color: #ef6c00; }
+    .sev-low { border-color: #f9a825; }
+    .sev-info { border-color: #1565c0; }
+    .badge { font-size: 0.75rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+    .evidence { font-size: 0.8rem; color: #666; margin-top: 0.4rem; }
+    code { background: #eee; padding: 0 0.25rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>{{ engagement_name }}</h1>
+  <p class="meta">
+    {% if client %}Client: {{ client }} · {% endif %}Date: {{ date }}
+  </p>
+  {% if scope_summary %}<p class="meta">Scope: {{ scope_summary }}</p>{% endif %}
+
+  <h2>Executive Summary</h2>
+  <p>{{ executive_summary or "Not yet generated." }}</p>
+
+  <h2>Risk Narrative</h2>
+  <p>{{ risk_narrative or "Not yet generated." }}</p>
+
+  <h2>Findings Overview</h2>
+  <p class="counts">
+    {% for sev, n in severity_counts.items() %}<span>{{ sev }}: {{ n }}</span>{% endfor %}
+  </p>
+
+  <h2>Findings ({{ findings | length }})</h2>
+  {% for f in findings %}
+  <div class="finding sev-{{ f.severity }}">
+    <div><span class="badge">{{ f.severity }}</span> — <strong>{{ f.title }}</strong></div>
+    {% if f.target %}<div class="meta">Target: {{ f.target }}</div>{% endif %}
+    {% if f.cwe %}<div class="meta">{{ f.cwe }}</div>{% endif %}
+    {% if f.description %}<p>{{ f.description }}</p>{% endif %}
+    {% if f.evidence %}<div class="evidence">Evidence: {% for e in f.evidence %}<code>{{ e }}</code> {% endfor %}</div>{% endif %}
+  </div>
+  {% else %}
+  <p>No confirmed findings.</p>
+  {% endfor %}
+</body>
+</html>

@@ -1,0 +1,6 @@
+name: subdomain-enumeration
+description: Enumerate subdomains of an in-scope apex domain and triage which hosts are live.
+version: 0.1.0
+phase: recon
+tags: [recon, dns, attack-surface, osint]
+risk_hint: active

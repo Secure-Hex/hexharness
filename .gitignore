@@ -1,0 +1,18 @@
+# venv
+venv/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# local tooling / runtime
+.atl/
+*.sqlite
+*.db
+
+# kill-switch trigger files
+*.kill

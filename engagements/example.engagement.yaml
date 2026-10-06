@@ -1,0 +1,30 @@
+# HexHarness engagement — declarative, versionable. This file is the single source of
+# the ROE ceiling, scope, time windows and budget. Immutable at runtime.
+name: acme-external-2026
+client: ACME Corp
+
+scope:
+  cidrs:
+    - 203.0.113.0/24
+  domains:
+    - acme.example
+    - "*.acme.example"
+  exclusions:
+    # Always win over the allow rules. Out of scope = deny, always.
+    - vpn.acme.example
+    - 203.0.113.1/32
+
+roe:
+  max_risk: active            # passive | active | intrusive | destructive
+  max_autonomy: interactive   # plan | report | interactive | auto | bypass
+  max_phase: enumeration      # recon | enumeration | exploitation | post_exploitation | reporting
+  windows:
+    - start: "09:00"
+      end: "18:00"
+
+budget:
+  max_tokens: 2000000
+  max_usd: 50
+  max_seconds: 7200
+
+report_template: default.html.j2
