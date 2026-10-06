@@ -42,6 +42,7 @@ class AgentLoop:
         max_iterations: int = 12,
         kill_switch=None,
         on_text=None,
+        compact_threshold: float = 0.8,
     ):
         self.provider = provider
         self.control = control
@@ -53,10 +54,56 @@ class AgentLoop:
         self.max_iterations = max_iterations
         self.kill_switch = kill_switch
         self.on_text = on_text
+        self.compact_threshold = compact_threshold
+        # Persistent conversation across run() calls, so the model remembers prior turns
+        # and compaction has something to compact.
+        self.conversation: list[Message] = []
+        self.last_input_tokens = 0
+
+    def _model_id(self) -> str:
+        return self.model or getattr(self.provider, "default_model", "") or ""
+
+    def context_ratio(self) -> float:
+        """Fraction of the model's context window used by the last call (for the UI)."""
+        from hexharness.providers.context_window import usage_ratio
+
+        return usage_ratio(self._model_id(), self.last_input_tokens)
+
+    async def compact(self, *, reason: str = "manual") -> int:
+        """Summarize the conversation into durable notes and replace the history with a
+        single summary message. Returns how many messages were collapsed."""
+        if len(self.conversation) < 2:
+            return 0
+        before = len(self.conversation)
+        summary_req = [
+            *self.conversation,
+            Message.user_text(
+                "Compact this pentest session into terse durable notes: objectives, scope, "
+                "confirmed/candidate findings, decisions, and open threads. Preserve facts "
+                "needed to continue; drop chatter."
+            ),
+        ]
+        resp = await self.provider.complete(
+            summary_req, system="You compact a pentest session transcript into durable notes.",
+            model=self.model,
+        )
+        self.conversation = [Message.user_text(f"[compacted session summary]\n{resp.text()}")]
+        self.last_input_tokens = resp.usage.input_tokens
+        await self.events.append(
+            EventType.CONTEXT_COMPACTED,
+            {"reason": reason, "messages_before": before, "messages_after": len(self.conversation)},
+        )
+        return before - len(self.conversation)
 
     async def run(self, user_prompt: str) -> str:
+        from hexharness.providers.context_window import should_compact
+
         await self.events.append(EventType.USER_PROMPT, {"text": user_prompt, "subagent": self.ctx.subagent_id})
-        messages: list[Message] = [Message.user_text(user_prompt)]
+        # Auto-compact BEFORE adding the new turn if the last call was near the window.
+        if should_compact(self._model_id(), self.last_input_tokens, self.compact_threshold):
+            await self.compact(reason="auto")
+        self.conversation.append(Message.user_text(user_prompt))
+        messages = self.conversation
 
         for _ in range(self.max_iterations):
             if self.kill_switch and self.kill_switch.triggered:
@@ -66,6 +113,7 @@ class AgentLoop:
                 messages, tools=self.registry.specs(), system=self.system, model=self.model,
                 on_text=self.on_text,
             )
+            self.last_input_tokens = resp.usage.input_tokens
             self.control.budget.add_tokens(resp.usage.total_tokens)
             self.control.budget.add_usd(usd_cost(resp.model or self.model or "", resp.usage))
             await self.events.append(

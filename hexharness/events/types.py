@@ -21,6 +21,7 @@ class EventType(str, Enum):
     FINDING_REJECTED = "evidence.finding_rejected"
     BUDGET_UPDATED = "control.budget_updated"
     SECRET_PROVIDED = "control.secret_provided"  # name only — the value is never logged
+    CONTEXT_COMPACTED = "agent.context_compacted"
     KILL_REQUESTED = "control.kill_requested"
     CHECKPOINT = "recovery.checkpoint"
     # Orchestrator-worker (phase 8): a subtask handed to / returned from a worker.
