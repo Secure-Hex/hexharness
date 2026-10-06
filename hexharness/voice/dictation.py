@@ -18,6 +18,8 @@ SAMPLE_RATE = 16_000  # Whisper expects 16 kHz mono
 
 class Recorder(Protocol):
     def start(self) -> None: ...
+    def snapshot(self):  # audio captured so far, WITHOUT stopping (for live partials) ...
+        ...
     def stop(self):  # returns captured audio (numpy float32 mono) ...
         ...
 
@@ -53,6 +55,16 @@ class _SoundDeviceRecorder:
         )
         self._stream.start()
 
+    def snapshot(self):
+        import numpy as np
+
+        # ponytail: reads the frame list while the audio callback appends to it; list
+        # append is atomic under the GIL, so a torn read is at worst one stale frame.
+        frames = list(self._frames)
+        if not frames:
+            return np.zeros(0, dtype="float32")
+        return np.concatenate(frames, axis=0).reshape(-1)
+
     def stop(self):
         import numpy as np
 
@@ -83,22 +95,48 @@ class _WhisperTranscriber:
 
 class Dictation:
     def __init__(self, *, model_size: str = "base", recorder: Recorder | None = None,
-                 transcriber: Transcriber | None = None, sample_rate: int = SAMPLE_RATE):
+                 transcriber: Transcriber | None = None, sample_rate: int = SAMPLE_RATE,
+                 partial_interval: float = 1.2):
         self.sample_rate = sample_rate
         self._recorder = recorder or _SoundDeviceRecorder(sample_rate)
         self._transcriber = transcriber or _WhisperTranscriber(model_size)
         self.is_recording = False
+        self.partial_interval = partial_interval
+        self._task = None
 
     @staticmethod
     def available() -> bool:
         return available()
 
-    def start(self) -> None:
+    def start(self, on_partial=None) -> None:
+        """Begin recording. If on_partial is given, re-transcribe the audio-so-far every
+        partial_interval seconds and push the growing text — so the prompt fills LIVE as
+        the operator speaks (like Claude Code), not only after they stop."""
         self._recorder.start()
         self.is_recording = True
+        if on_partial is not None:
+            self._task = asyncio.ensure_future(self._partials(on_partial))
+
+    async def _partials(self, on_partial) -> None:
+        try:
+            while self.is_recording:
+                await asyncio.sleep(self.partial_interval)
+                audio = self._recorder.snapshot()
+                if audio is None or len(audio) == 0:
+                    continue
+                # ponytail: re-transcribes the whole clip each tick — simple and fine for
+                # short prompts; switch to a sliding window / VAD for long dictation.
+                text = await asyncio.to_thread(self._transcriber.transcribe, audio, self.sample_rate)
+                if self.is_recording and text:
+                    on_partial(text)
+        except asyncio.CancelledError:
+            pass
 
     async def stop_and_transcribe(self) -> str:
-        audio = self._recorder.stop()
         self.is_recording = False
+        if self._task is not None:
+            self._task.cancel()
+            self._task = None
+        audio = self._recorder.stop()
         # Whisper is CPU-bound — run off the event loop so the UI never freezes.
         return await asyncio.to_thread(self._transcriber.transcribe, audio, self.sample_rate)

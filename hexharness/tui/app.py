@@ -67,6 +67,7 @@ class HexTUI(App):
         self._live_buf = ""       # accumulating streamed text for the current model turn
         self._streamed = False    # did any text stream this run? (non-streaming providers: no)
         self._dictation = None    # lazy push-to-talk dictation (local Whisper)
+        self._dict_base = ""      # prompt text present when dictation started
 
     # --- layout ---
 
@@ -261,20 +262,23 @@ class HexTUI(App):
         if self._dictation is None:
             self._dictation = Dictation()
 
+        box = self.query_one("#prompt", Input)
         if not self._dictation.is_recording:
-            self._dictation.start()
-            self._log("● recording… (Ctrl+R to stop)", _DANGER)
+            # Remember whatever was already typed; dictation appends to it, live.
+            self._dict_base = box.value.strip()
+            self._dictation.start(on_partial=self._dictation_partial)
+            self._log("● recording… speak; prompt fills live (Ctrl+R to stop)", _DANGER)
             return
 
-        self._log("transcribing…", _MUTED)
         text = (await self._dictation.stop_and_transcribe()).strip()
-        if not text:
-            self._log("(no speech detected)", _MUTED)
-            return
-        box = self.query_one("#prompt", Input)
-        box.value = (box.value + " " + text).strip() if box.value else text
+        box.value = f"{self._dict_base} {text}".strip() if self._dict_base else text
         box.focus()
-        self._log(f"🎙 {text}", _MUTED)
+        self._log("🎙 done" if text else "(no speech detected)", _MUTED)
+
+    def _dictation_partial(self, text: str) -> None:
+        """Live partial transcript -> prompt, as the operator speaks (app loop)."""
+        box = self.query_one("#prompt", Input)
+        box.value = f"{self._dict_base} {text}".strip() if self._dict_base else text
 
     @work
     async def action_capabilities(self) -> None:
