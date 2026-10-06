@@ -5,7 +5,8 @@ import pytest
 
 pytest.importorskip("textual")
 
-from textual.widgets import Footer, Input, Label, RichLog  # noqa: E402
+from textual.widgets import Footer, Label, RichLog  # noqa: E402
+from hexharness.tui.widgets import PromptArea  # noqa: E402
 
 from hexharness.tui import providers  # noqa: E402
 from hexharness.tui.app import HexHeader, HexTUI  # noqa: E402
@@ -51,7 +52,7 @@ async def test_app_mounts_core_widgets():
     async with app.run_test() as pilot:
         assert app.query_one("#header", HexHeader)
         assert app.query_one("#transcript", RichLog)
-        assert app.query_one("#prompt", Input)
+        assert app.query_one("#prompt", PromptArea)
         assert app.query_one(Footer)
         # header carries the brand + mode
         header_text = str(app.query_one("#header", HexHeader).render())

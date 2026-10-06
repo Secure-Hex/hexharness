@@ -12,12 +12,13 @@ from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer, Input, RichLog, Static
+from textual.widgets import Footer, RichLog, Static
 
 from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.engine import Engine
 from hexharness.events.types import Event, EventType
 from hexharness.tui.approver import TUIApprover, TUISecretRequester
+from hexharness.tui.widgets import PromptArea
 from hexharness.tui import providers
 from hexharness.tui.providers import build, entry, model_for, router_spec
 from hexharness.tui.screens import CapabilitiesScreen, ModeScreen, ProviderScreen
@@ -75,12 +76,13 @@ class HexTUI(App):
         yield HexHeader(id="header")
         yield RichLog(id="transcript", wrap=True, markup=False, highlight=False)
         yield Static("", id="live")  # live-streaming model text for the current turn
-        yield Input(placeholder="Describe a task…  (Enter to run, Ctrl+P providers)", id="prompt")
+        # multi-line, soft-wrapping, auto-growing prompt (Enter submits, Ctrl+J newline)
+        yield PromptArea(id="prompt", soft_wrap=True)
         yield Footer()
 
     def on_mount(self) -> None:
         self._sync_header()
-        self.query_one("#prompt", Input).focus()
+        self.query_one("#prompt", PromptArea).focus()
         self._log("HexHarness ready. Ctrl+P to pick a provider, then type a task.", _MUTED)
 
     # --- header ---
@@ -159,17 +161,17 @@ class HexTUI(App):
 
     # --- running ---
 
-    @on(Input.Submitted, "#prompt")
-    def _submit(self, event: Input.Submitted) -> None:
-        prompt = event.value.strip()
+    @on(PromptArea.Submitted)
+    def _submit(self, event: PromptArea.Submitted) -> None:
+        prompt = event.text.strip()
         if not prompt:
             return
-        event.input.value = ""
+        self.query_one("#prompt", PromptArea).text = ""
         self._run(prompt)
 
     @work(exclusive=True)
     async def _run(self, prompt: str) -> None:
-        box = self.query_one("#prompt", Input)
+        box = self.query_one("#prompt", PromptArea)
         box.disabled = True
         self._log(f"❯ {prompt}", _ACCENT)
         self._live_buf = ""
@@ -262,23 +264,23 @@ class HexTUI(App):
         if self._dictation is None:
             self._dictation = Dictation()
 
-        box = self.query_one("#prompt", Input)
+        box = self.query_one("#prompt", PromptArea)
         if not self._dictation.is_recording:
             # Remember whatever was already typed; dictation appends to it, live.
-            self._dict_base = box.value.strip()
+            self._dict_base = box.text.strip()
             self._dictation.start(on_partial=self._dictation_partial)
             self._log("● recording… speak; prompt fills live (Ctrl+R to stop)", _DANGER)
             return
 
         text = (await self._dictation.stop_and_transcribe()).strip()
-        box.value = f"{self._dict_base} {text}".strip() if self._dict_base else text
+        box.text = f"{self._dict_base} {text}".strip() if self._dict_base else text
         box.focus()
         self._log("🎙 done" if text else "(no speech detected)", _MUTED)
 
     def _dictation_partial(self, text: str) -> None:
         """Live partial transcript -> prompt, as the operator speaks (app loop)."""
-        box = self.query_one("#prompt", Input)
-        box.value = f"{self._dict_base} {text}".strip() if self._dict_base else text
+        box = self.query_one("#prompt", PromptArea)
+        box.text = f"{self._dict_base} {text}".strip() if self._dict_base else text
 
     @work
     async def action_capabilities(self) -> None:

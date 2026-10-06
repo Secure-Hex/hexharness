@@ -46,19 +46,22 @@ class ProviderScreen(ModalScreen[dict]):
     def compose(self) -> ComposeResult:
         with Vertical(id="provider-panel"):
             yield Static("Providers  ·  pick one, or multi-select to build a router", id="provider-title")
-            yield ListView(
-                *[ListItem(Label(_row(e)), id=f"prov-{e.key}") for e in CATALOG],
-                id="prov-list",
-            )
-            yield Input(placeholder="model override (optional)", id="model-input")
-            with Horizontal(id="register-row"):
-                yield Input(placeholder="API key / base_url to register", password=True, id="secret-input")
-                yield Button("Register", id="register-btn")
-            yield Static("Router members (space to toggle; order = fallback order):", classes="dim")
-            yield SelectionList[str](
-                *[(e.label, e.key) for e in CATALOG], id="router-list",
-            )
-            yield Static("", id="prov-status", classes="dim")
+            # Scrollable content so a long provider list never pushes the buttons off-screen.
+            with VerticalScroll(id="provider-scroll"):
+                yield ListView(
+                    *[ListItem(Label(_row(e)), id=f"prov-{e.key}") for e in CATALOG],
+                    id="prov-list",
+                )
+                yield Input(placeholder="model override (optional)", id="model-input")
+                with Horizontal(id="register-row"):
+                    yield Input(placeholder="API key / base_url to register", password=True, id="secret-input")
+                    yield Button("Register", id="register-btn")
+                yield Static("Router members (space to toggle; order = fallback order):", classes="dim")
+                yield SelectionList[str](
+                    *[(e.label, e.key) for e in CATALOG], id="router-list",
+                )
+                yield Static("", id="prov-status", classes="dim")
+            # Action buttons stay OUTSIDE the scroll => always visible.
             with Horizontal(id="provider-buttons"):
                 yield Button("Use provider", variant="primary", id="use-btn")
                 yield Button("Build router", id="router-btn")

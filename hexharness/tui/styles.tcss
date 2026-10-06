@@ -68,11 +68,13 @@ ProviderScreen {
 #provider-panel {
     width: 80;
     max-width: 90%;
-    height: auto;
-    max-height: 90%;
+    height: 90%;          /* definite height so the scroll region can flex and buttons pin */
     padding: 1 2;
     background: $hh-panel;
     border: round $hh-accent;
+}
+#provider-scroll {
+    height: 1fr;          /* takes the space between title and buttons; scrolls when full */
 }
 #provider-title {
     color: $hh-accent;
