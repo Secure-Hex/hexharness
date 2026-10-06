@@ -267,6 +267,50 @@ CapabilitiesScreen {
     padding-top: 1;
 }
 
+/* --- modal: findings (curation) --- */
+FindingsScreen {
+    align: center middle;
+}
+#findings-panel {
+    width: 90;
+    max-width: 95%;
+    height: 90%;          /* definite height so the scroll flexes and buttons pin */
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-accent;
+}
+#findings-scroll {
+    height: 1fr;          /* space between title and buttons; scrolls when full */
+}
+#findings-title {
+    color: $hh-accent;
+    padding-bottom: 1;
+}
+#cand-list {
+    height: auto;
+    max-height: 12;
+    background: $hh-background;
+    border: round $hh-border;
+    margin-bottom: 1;
+}
+#cand-list > ListItem {
+    background: $hh-background;
+    color: $hh-text;
+    padding: 0 1;
+}
+#cand-list > ListItem.--highlight {
+    background: $hh-border;
+    color: $hh-accent;
+}
+#confirmed-box, #rejected-box {
+    height: auto;
+}
+#findings-buttons {
+    height: auto;
+    align-horizontal: left;
+    padding-top: 1;
+}
+
 Button {
     margin-right: 2;
 }

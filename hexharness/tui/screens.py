@@ -410,3 +410,136 @@ class CapabilitiesScreen(ModalScreen[None]):
                         yield Label(f"  {name}")
                 else:
                     yield Label("  (none)")
+
+
+class FindingsScreen(ModalScreen[None]):
+    """Findings panel — invariant #5: the agent only ever records CANDIDATEs; a human
+    promotes them. Lists findings grouped CANDIDATES / CONFIRMED / REJECTED, and lets the
+    operator Confirm or Reject the highlighted candidate (keys `c` / `r`, or the buttons).
+    Curation goes through the EvidenceStore (`confirm`/`reject`), which emits the audit
+    event and moves the finding out of candidates; the lists then re-query in place.
+
+    `engine` may be None (no run yet => no evidence store): an empty-state note is shown.
+    Esc closes.
+    """
+
+    BINDINGS = [
+        ("escape", "dismiss", "Close"),
+        ("c", "confirm", "Confirm"),
+        ("r", "reject", "Reject"),
+    ]
+
+    def __init__(self, *, engine: Any) -> None:
+        super().__init__()
+        self._engine = engine
+        self._active: str | None = None  # highlighted candidate's finding id
+
+    # --- data (re-queries the store every call, so refresh == rebuild from source) ---
+
+    def _groups(self) -> tuple[list[Any], list[Any], list[Any]]:
+        """(candidates, confirmed, rejected) straight from the store; () if no engine."""
+        if self._engine is None:
+            return ([], [], [])
+        ev = self._engine.evidence
+        return (ev.candidates(), ev.confirmed(), ev.rejected())
+
+    def _title(self) -> str:
+        c, cf, rj = (len(g) for g in self._groups())
+        return f"Findings · {c} candidate · {cf} confirmed · {rj} rejected"
+
+    @staticmethod
+    def _row(f: Any, *, hint: bool = False) -> str:
+        base = f"  {f.severity.value:8} {f.title}  —  {f.target or '—'}"
+        return base + "   [c confirm · r reject]" if hint else base
+
+    # --- layout ---
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="findings-panel"):
+            yield Static(self._title(), id="findings-title")
+            if self._engine is None:
+                yield Static(
+                    "no engagement running yet — findings appear once the agent records them",
+                    classes="dim",
+                )
+                return
+            # Content scrolls; action buttons stay OUTSIDE the scroll => always visible.
+            with VerticalScroll(id="findings-scroll"):
+                yield Static("Candidates  (c confirm · r reject)", classes="cap-section")
+                yield ListView(id="cand-list")
+                yield Static("Confirmed", classes="cap-section")
+                yield Vertical(id="confirmed-box")
+                yield Static("Rejected", classes="cap-section")
+                yield Vertical(id="rejected-box")
+            with Horizontal(id="findings-buttons"):
+                yield Button("Confirm", variant="success", id="confirm-btn")
+                yield Button("Reject", variant="error", id="reject-btn")
+                yield Button("Close", id="close-btn")
+
+    async def on_mount(self) -> None:
+        if self._engine is not None:
+            await self._rebuild()
+
+    async def _rebuild(self) -> None:
+        cands, conf, rej = self._groups()
+        self.query_one("#findings-title", Static).update(self._title())
+        lst = self.query_one("#cand-list", ListView)
+        await lst.clear()
+        for f in cands:
+            await lst.append(ListItem(Label(self._row(f, hint=True)), id=f"cand-{f.id}"))
+        self._active = cands[0].id if cands else None
+        if cands:
+            lst.index = 0
+        await self._fill("#confirmed-box", conf)
+        await self._fill("#rejected-box", rej)
+
+    async def _fill(self, selector: str, findings: list[Any]) -> None:
+        box = self.query_one(selector, Vertical)
+        await box.remove_children()
+        if findings:
+            for f in findings:
+                await box.mount(Label(self._row(f)))
+        else:
+            await box.mount(Label("  (none)", classes="dim"))
+
+    # --- interaction ---
+
+    @on(ListView.Highlighted, "#cand-list")
+    def _highlight(self, event: ListView.Highlighted) -> None:
+        self._active = event.item.id.removeprefix("cand-") if event.item and event.item.id else None
+
+    def action_confirm(self) -> None:
+        self._curate("confirm")
+
+    def action_reject(self) -> None:
+        self._curate("reject")
+
+    @on(Button.Pressed, "#confirm-btn")
+    def _confirm_btn(self) -> None:
+        self._curate("confirm")
+
+    @on(Button.Pressed, "#reject-btn")
+    def _reject_btn(self) -> None:
+        self._curate("reject")
+
+    @on(Button.Pressed, "#close-btn")
+    def _close_btn(self) -> None:
+        self.dismiss(None)
+
+    @work
+    async def _curate(self, action: str) -> None:
+        fid = self._active
+        if fid is None:
+            return
+        if action == "confirm":
+            await self.confirm_finding(fid)
+        else:
+            await self.reject_finding(fid)
+        await self._rebuild()  # finding moved out of candidates => re-read in place
+
+    # Store calls split out from the UI refresh so they're drivable without a mounted tree.
+    async def confirm_finding(self, fid: str) -> None:
+        await self._engine.evidence.confirm(fid, curator="operator")
+
+    async def reject_finding(self, fid: str) -> None:
+        await self._engine.evidence.reject(fid, curator="operator", reason="rejected via TUI")

@@ -22,7 +22,7 @@ from hexharness.tui.approver import TUIApprover, TUISecretRequester
 from hexharness.tui.widgets import PromptArea
 from hexharness.tui import providers
 from hexharness.tui.providers import build, entry, model_for, router_spec
-from hexharness.tui.screens import CapabilitiesScreen, ModeScreen, ProviderScreen
+from hexharness.tui.screens import CapabilitiesScreen, FindingsScreen, ModeScreen, ProviderScreen
 
 DEFAULT_ENGAGEMENT = "engagements/example.engagement.yaml"
 
@@ -47,6 +47,7 @@ class HexTUI(App):
     BINDINGS = [
         Binding("ctrl+p", "providers", "Providers"),
         Binding("ctrl+t", "capabilities", "Capabilities"),
+        Binding("ctrl+f", "findings", "Findings"),
         Binding("ctrl+k", "kill", "Kill switch"),
         Binding("ctrl+l", "clear", "Clear"),
         Binding("ctrl+o", "mode", "Mode"),
@@ -321,6 +322,16 @@ class HexTUI(App):
         await self.push_screen_wait(
             CapabilitiesScreen(engine=self.engine, provider=provider, model=model)
         )
+
+    @work
+    async def action_findings(self) -> None:
+        # Build the engine so the panel reads the live evidence store; if no provider key
+        # is configured yet the screen shows its empty-state note (never crash the UI).
+        try:
+            self._ensure_engine()
+        except RuntimeError:
+            pass
+        await self.push_screen_wait(FindingsScreen(engine=self.engine))
 
     async def action_kill(self) -> None:
         if self.engine is None:
