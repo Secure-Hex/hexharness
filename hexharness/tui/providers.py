@@ -25,6 +25,10 @@ class ProviderEntry:
     base_url_env: str | None = None
     # $/Mtok (in, out) — a small default table; only used to build a Router.
     cost: tuple[float, float] = (1.0, 1.0)
+    # "native" = a dedicated adapter class; "openai_compatible" = the generic adapter
+    # pointed at a fixed base_url (OpenRouter, Groq, ...).
+    kind: str = "native"
+    base_url: str | None = None  # fixed endpoint for openai_compatible entries
 
 
 # ponytail: one flat list is the whole registry; no plugin loader until a 5th provider
@@ -43,6 +47,27 @@ CATALOG: list[ProviderEntry] = [
                   "HEXHARNESS_OLLAMA_MODEL", "llama3.1",
                   "hexharness.providers.ollama", "OllamaProvider",
                   needs_base_url=True, base_url_env="OLLAMA_BASE_URL", cost=(0.0, 0.0)),
+]
+
+# OpenAI-compatible gateways: same wire format, different base_url + key. One generic
+# adapter serves them all. Base URLs verified against each provider's API docs.
+_OAI_COMPAT = [
+    ("openrouter", "OpenRouter", "OPENROUTER_API_KEY", "https://openrouter.ai/api/v1", "openai/gpt-4o"),
+    ("groq", "Groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"),
+    ("together", "Together AI", "TOGETHER_API_KEY", "https://api.together.xyz/v1",
+     "meta-llama/Llama-3.3-70B-Instruct-Turbo"),
+    ("deepseek", "DeepSeek", "DEEPSEEK_API_KEY", "https://api.deepseek.com", "deepseek-chat"),
+    ("xai", "xAI (Grok)", "XAI_API_KEY", "https://api.x.ai/v1", "grok-2-latest"),
+    ("mistral", "Mistral", "MISTRAL_API_KEY", "https://api.mistral.ai/v1", "mistral-large-latest"),
+    ("fireworks", "Fireworks", "FIREWORKS_API_KEY", "https://api.fireworks.ai/inference/v1",
+     "accounts/fireworks/models/llama-v3p3-70b-instruct"),
+    ("perplexity", "Perplexity", "PERPLEXITY_API_KEY", "https://api.perplexity.ai", "sonar"),
+]
+CATALOG += [
+    ProviderEntry(key, label, (env,), f"HEXHARNESS_{key.upper()}_MODEL", default_model,
+                  "hexharness.providers.openai_compatible", "OpenAICompatibleProvider",
+                  kind="openai_compatible", base_url=base_url)
+    for key, label, env, base_url, default_model in _OAI_COMPAT
 ]
 
 _BY_KEY = {e.key: e for e in CATALOG}
@@ -65,11 +90,28 @@ def model_for(e: ProviderEntry) -> str:
 def build(e: ProviderEntry, *, model: str | None = None) -> LLMProvider:
     """Construct the provider lazily. The constructor reads its key/base_url from env and
     raises RuntimeError if a required key is missing — so build only on a selected entry."""
+    if e.kind == "openai_compatible":
+        from hexharness.providers.openai_compatible import OpenAICompatibleProvider
+
+        return OpenAICompatibleProvider(
+            base_url=e.base_url, default_model=model or model_for(e),
+            name=e.key, api_key_env=e.required_env[0],
+        )
     cls = getattr(importlib.import_module(e.module), e.cls_name)
     kwargs: dict[str, object] = {}
     if model:
         kwargs["default_model"] = model
     return cls(**kwargs)
+
+
+def build_custom(*, name: str, base_url: str, api_key: str, model: str) -> LLMProvider:
+    """Bring-your-own OpenAI-compatible provider: the operator supplies base_url + key +
+    model at runtime (e.g. a self-hosted gateway). The key is passed directly, never env."""
+    from hexharness.providers.openai_compatible import OpenAICompatibleProvider
+
+    return OpenAICompatibleProvider(
+        base_url=base_url, default_model=model or "", name=name or "custom", api_key=api_key,
+    )
 
 
 def register(e: ProviderEntry, values: dict[str, str]) -> None:
