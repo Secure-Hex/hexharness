@@ -74,6 +74,10 @@ class WebSearchTool(Tool):
         self.vault = vault
         self._search_fn = search_fn  # test/override hook
 
+    def active_backend(self) -> str:
+        """Name of the backend that a search would use right now (for the UI)."""
+        return self._select_backend()[0]
+
     def _select_backend(self) -> tuple[str, Callable[[str, int], list[Result]]]:
         if self._search_fn is not None:
             return "injected", self._search_fn

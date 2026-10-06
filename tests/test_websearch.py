@@ -35,3 +35,17 @@ async def test_empty_results_message():
     tool = WebSearchTool(search_fn=lambda q, k: [])
     out = await tool.run({"query": "nothing"})
     assert "no results" in out
+
+
+def test_capabilities_panel_shows_active_backend():
+    import pytest
+    pytest.importorskip("textual")
+    from types import SimpleNamespace
+    from hexharness.tui.screens import CapabilitiesScreen
+
+    v = Vault()
+    eng = SimpleNamespace(registry=SimpleNamespace(_tools={"web_search": WebSearchTool(v)}), vault=v)
+    screen = CapabilitiesScreen(engine=eng, provider="anthropic", model="x")
+    assert screen._web_backend() == "duckduckgo"
+    v.set("TAVILY_API_KEY", "k")
+    assert screen._web_backend() == "tavily"

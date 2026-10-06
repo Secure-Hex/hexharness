@@ -348,6 +348,13 @@ class CapabilitiesScreen(ModalScreen[None]):
 
         return default_registry()._tools
 
+    def _web_backend(self) -> str | None:
+        tool = self._tools().get("web_search")
+        try:
+            return tool.active_backend() if tool is not None else None
+        except Exception:  # noqa: BLE001
+            return None
+
     def _secret_names(self) -> list[str]:
         if self._engine is not None and self._engine.vault is not None:
             return self._engine.vault.names()  # NAMES ONLY — never values
@@ -381,6 +388,12 @@ class CapabilitiesScreen(ModalScreen[None]):
                     suffix = f"  —  {', '.join(flags)}" if flags else ""
                     yield Label(f"  {tool.name}  ·  {tool.risk_level.name.lower()}{suffix}")
                 yield Static("  MCP tools appear here once connected.", classes="dim")
+
+                backend = self._web_backend()
+                if backend:
+                    yield Static("Web search", classes="cap-section")
+                    yield Label(f"  active backend: {backend}"
+                                + ("  (free, no key)" if backend == "duckduckgo" else "  (via API key)"))
 
                 yield Static("Skills available", classes="cap-section")
                 skills = self._skills()
