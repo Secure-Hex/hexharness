@@ -17,6 +17,7 @@ from textual.widgets import Footer, RichLog, Static
 from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.engine import Engine
 from hexharness.events.types import Event, EventType
+from hexharness.skills.slash import expand_slash, is_list_request, list_skills
 from hexharness.tui.approver import TUIApprover, TUISecretRequester
 from hexharness.tui.widgets import PromptArea
 from hexharness.tui import providers
@@ -69,6 +70,7 @@ class HexTUI(App):
         self._streamed = False    # did any text stream this run? (non-streaming providers: no)
         self._dictation = None    # lazy push-to-talk dictation (local Whisper)
         self._dict_base = ""      # prompt text present when dictation started
+        self._skills = None       # lazy SkillRegistry for /slash skill references
 
     # --- layout ---
 
@@ -161,12 +163,37 @@ class HexTUI(App):
 
     # --- running ---
 
+    def _skill_registry(self):
+        if self._skills is None:
+            from pathlib import Path
+
+            import hexharness.skills as pkg
+            from hexharness.skills.engine import SkillRegistry
+
+            lib = Path(pkg.__file__).parent / "library"
+            self._skills = SkillRegistry().discover(lib) if lib.is_dir() else SkillRegistry()
+        return self._skills
+
     @on(PromptArea.Submitted)
     def _submit(self, event: PromptArea.Submitted) -> None:
         prompt = event.text.strip()
         if not prompt:
             return
         self.query_one("#prompt", PromptArea).text = ""
+
+        reg = self._skill_registry()
+        if is_list_request(prompt):
+            names = list_skills(reg)
+            self._log("skills: " + (", ".join(f"/{n}" for n in names) or "(none)"), _MUTED)
+            return
+        prompt, used, unknown = expand_slash(prompt, reg)
+        if unknown:
+            names = list_skills(reg)
+            self._log(f"unknown skill /{unknown} — available: "
+                      + (", ".join(f"/{n}" for n in names) or "(none)"), _WARNING)
+            return
+        if used:
+            self._log(f"using skill /{used}", _MUTED)
         self._run(prompt)
 
     @work(exclusive=True)
