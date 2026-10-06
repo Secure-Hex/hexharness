@@ -63,7 +63,40 @@ class Engine:
         approver: Approver | None = None, subagent: str = "main", db: str = ":memory:",
         registry: ToolRegistry | None = None, kill_trigger_file: str | Path | None = None,
     ) -> "Engine":
-        eng = Engagement.load(path)
+        return cls._assemble(
+            Engagement.load(path), provider=provider, requested_mode=requested_mode,
+            approver=approver, subagent=subagent, db=db, registry=registry,
+            kill_trigger_file=kill_trigger_file,
+        )
+
+    @classmethod
+    def bootstrap(cls, *, out_dir: str | Path = "engagements", approver: Approver | None = None,
+                  db: str = ":memory:") -> "Engine":
+        """A locked engine whose ONLY capability is drafting a new engagement from a
+        natural-language brief. Empty scope, report-only autonomy, passive ceiling — it
+        cannot scan or exploit anything. Used by `hexharness init` before a real
+        engagement exists; the drafted file still needs human activation."""
+        from hexharness.tools.native.engagement_tools import EngagementDraftTool
+
+        eng = Engagement.model_validate({
+            "name": "bootstrap", "client": "",
+            "scope": {}, "roe": {"max_risk": "passive", "max_autonomy": "report", "max_phase": "recon"},
+        })
+        reg = ToolRegistry()
+        reg.register(EngagementDraftTool(out_dir))
+        from hexharness.control.policy import Autonomy, Phase
+
+        return cls._assemble(
+            eng, provider=None, requested_mode=Mode(autonomy=Autonomy.REPORT, phase=Phase.RECON),
+            approver=approver, subagent="bootstrap", db=db, registry=reg, kill_trigger_file=None,
+        )
+
+    @classmethod
+    def _assemble(
+        cls, eng: Engagement, *, provider: LLMProvider | None, requested_mode: Mode | None,
+        approver: Approver | None, subagent: str, db: str, registry: ToolRegistry | None,
+        kill_trigger_file: str | Path | None,
+    ) -> "Engine":
         bus = EventBus()
         # Tracing is a projection of the event stream: attach BEFORE the first append.
         # No-op if opentelemetry isn't installed; a broken tracer can't break the stream.

@@ -24,6 +24,20 @@ ANTHROPIC_API_KEY=sk-... ./venv/bin/python -m hexharness \
 
 The requested `--autonomy/--phase` are clamped to the engagement's ROE ceiling.
 
+### Create an engagement from a natural-language brief
+
+```bash
+ANTHROPIC_API_KEY=sk-... ./venv/bin/python -m hexharness init \
+    "External test of acme.example and 203.0.113.0/24, exclude vpn.acme.example, \
+     enumeration only, business hours" \
+    --task "Resolve www.acme.example"
+```
+
+The agent drafts a validated `engagement.yaml` from the brief, shows it, and waits for
+you to confirm before anything runs under it. The model can never grant itself scope or
+ROE: drafting writes an inert file, and activation is a human step (invariants #3/#4).
+The bootstrap engine used for drafting has empty scope and can only draft — it cannot scan.
+
 ## The non-negotiable invariants (each has a test)
 
 1. The agent loop never calls `tool.run()` directly — always `ControlPlane.authorize()` first.
