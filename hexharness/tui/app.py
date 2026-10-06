@@ -48,6 +48,7 @@ class HexTUI(App):
         Binding("ctrl+k", "kill", "Kill switch"),
         Binding("ctrl+l", "clear", "Clear"),
         Binding("ctrl+o", "mode", "Mode"),
+        Binding("ctrl+r", "dictate", "Dictate"),
         Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
         Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
         Binding("ctrl+q", "quit", "Quit"),
@@ -65,6 +66,7 @@ class HexTUI(App):
         self._usd = 0.0
         self._live_buf = ""       # accumulating streamed text for the current model turn
         self._streamed = False    # did any text stream this run? (non-streaming providers: no)
+        self._dictation = None    # lazy push-to-talk dictation (local Whisper)
 
     # --- layout ---
 
@@ -246,6 +248,33 @@ class HexTUI(App):
         self.mode = result
         self._reset_mode()  # drop the engine so the next run rebuilds with the new mode
         self._log(f"mode set: {self.mode.autonomy.name.lower()}/{self.mode.phase.name.lower()}", _MUTED)
+
+    @work(exclusive=True, group="dictate")
+    async def action_dictate(self) -> None:
+        """Toggle push-to-talk dictation. Transcribes locally (Whisper) — audio never
+        leaves the machine. Ctrl+R starts; Ctrl+R again stops and inserts the text."""
+        from hexharness.voice.dictation import Dictation
+
+        if not Dictation.available():
+            self._log("voice not available — pip install -e '.[voice]'", _WARNING)
+            return
+        if self._dictation is None:
+            self._dictation = Dictation()
+
+        if not self._dictation.is_recording:
+            self._dictation.start()
+            self._log("● recording… (Ctrl+R to stop)", _DANGER)
+            return
+
+        self._log("transcribing…", _MUTED)
+        text = (await self._dictation.stop_and_transcribe()).strip()
+        if not text:
+            self._log("(no speech detected)", _MUTED)
+            return
+        box = self.query_one("#prompt", Input)
+        box.value = (box.value + " " + text).strip() if box.value else text
+        box.focus()
+        self._log(f"🎙 {text}", _MUTED)
 
     @work
     async def action_capabilities(self) -> None:
