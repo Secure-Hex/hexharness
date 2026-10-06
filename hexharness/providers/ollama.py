@@ -11,6 +11,7 @@ from typing import Any
 
 from hexharness.providers.openai import (
     from_openai_response,
+    stream_openai,
     to_openai_messages,
     tools_to_openai,
 )
@@ -40,7 +41,7 @@ class OllamaProvider:
         system: str | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
-        on_text=None,  # ponytail: accepted for the LLMProvider contract; real streaming is a TODO
+        on_text=None,
     ) -> ModelResponse:
         kwargs: dict[str, Any] = {
             "model": model or self.default_model,
@@ -49,5 +50,7 @@ class OllamaProvider:
         }
         if tools:
             kwargs["tools"] = tools_to_openai(tools)
+        if on_text is not None:
+            return await stream_openai(self._client, kwargs, on_text)
         resp = await self._client.chat.completions.create(**kwargs)
         return from_openai_response(resp)

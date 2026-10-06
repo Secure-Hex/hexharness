@@ -1,7 +1,7 @@
 """OpenAI adapter: normalized types <-> Chat Completions API.
 
 API key from env OPENAI_API_KEY. default_model from HEXHARNESS_OPENAI_MODEL or "gpt-4o".
-Streaming is deferred; one blocking completion is enough for the loop today.
+Streams when an on_text sink is given (see stream_openai); otherwise one blocking call.
 
 The mapping helpers (to_openai_messages / tools_to_openai / from_openai_response) are
 pure and SDK-free so they can be unit-tested without the `openai` package installed.
@@ -104,6 +104,58 @@ def from_openai_response(resp) -> ModelResponse:
     )
 
 
+async def stream_openai(client, kwargs: dict[str, Any], on_text) -> ModelResponse:
+    """Stream a Chat Completions call, pushing text deltas to on_text as they arrive,
+    and accumulate the full response (text + tool calls + usage) into a ModelResponse.
+    Shared by every OpenAI-compatible provider (OpenAI, Ollama, the gateways)."""
+    kwargs = {**kwargs, "stream": True, "stream_options": {"include_usage": True}}
+    text_parts: list[str] = []
+    tool_slots: dict[int, dict[str, str]] = {}  # index -> {id, name, args}
+    finish_reason: str | None = None
+    usage = None
+    model = ""
+
+    stream = await client.chat.completions.create(**kwargs)
+    async for chunk in stream:
+        if getattr(chunk, "model", ""):
+            model = chunk.model
+        if getattr(chunk, "usage", None):
+            usage = chunk.usage
+        for choice in chunk.choices or []:
+            delta = choice.delta
+            if getattr(delta, "content", None):
+                text_parts.append(delta.content)
+                on_text(delta.content)
+            for tc in getattr(delta, "tool_calls", None) or []:
+                slot = tool_slots.setdefault(tc.index, {"id": "", "name": "", "args": ""})
+                if tc.id:
+                    slot["id"] = tc.id
+                fn = getattr(tc, "function", None)
+                if fn and getattr(fn, "name", None):
+                    slot["name"] = fn.name
+                if fn and getattr(fn, "arguments", None):
+                    slot["args"] += fn.arguments
+            if choice.finish_reason:
+                finish_reason = choice.finish_reason
+
+    content: list = []
+    if "".join(text_parts):
+        content.append(TextBlock(text="".join(text_parts)))
+    for slot in tool_slots.values():
+        content.append(ToolUseBlock(
+            id=slot["id"], name=slot["name"], input=json.loads(slot["args"] or "{}")
+        ))
+    return ModelResponse(
+        content=content,
+        stop_reason=_STOP_MAP.get(finish_reason, StopReason.OTHER),
+        usage=Usage(
+            input_tokens=getattr(usage, "prompt_tokens", 0) if usage else 0,
+            output_tokens=getattr(usage, "completion_tokens", 0) if usage else 0,
+        ),
+        model=model,
+    )
+
+
 class OpenAIProvider:
     name = "openai"
 
@@ -134,5 +186,7 @@ class OpenAIProvider:
         }
         if tools:
             kwargs["tools"] = tools_to_openai(tools)
+        if on_text is not None:
+            return await stream_openai(self._client, kwargs, on_text)
         resp = await self._client.chat.completions.create(**kwargs)
         return from_openai_response(resp)
