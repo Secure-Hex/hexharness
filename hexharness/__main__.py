@@ -21,6 +21,7 @@ from pathlib import Path
 
 from hexharness.control.hitl import CLIApprover
 from hexharness.control.policy import Autonomy, Mode, Phase
+from hexharness.control.secrets import GetpassSecretRequester
 from hexharness.engine import Engine
 
 _DRAFT_SYSTEM = (
@@ -44,7 +45,7 @@ async def _run(args) -> str:
     provider = AnthropicProvider()
     engine = Engine.from_engagement(
         args.engagement, provider=provider, requested_mode=_build_mode(args),
-        approver=CLIApprover(), kill_trigger_file=args.kill_file,
+        approver=CLIApprover(), secret_requester=GetpassSecretRequester(), kill_trigger_file=args.kill_file,
     )
     engine.kill_switch.install_signal_handler()
     engine.kill_switch.start_file_watch()
@@ -81,7 +82,7 @@ async def _init(args) -> str:
 
     engine = Engine.from_engagement(
         path, provider=provider, requested_mode=_build_mode(args),
-        approver=CLIApprover(), kill_trigger_file=args.kill_file,
+        approver=CLIApprover(), secret_requester=GetpassSecretRequester(), kill_trigger_file=args.kill_file,
     )
     engine.kill_switch.install_signal_handler()
     engine.kill_switch.start_file_watch()

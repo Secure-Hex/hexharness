@@ -139,6 +139,66 @@ ApprovalModal {
     padding-bottom: 1;
 }
 
+/* --- modal: secret input --- */
+SecretModal {
+    align: center middle;
+}
+#secret-panel {
+    width: 70;
+    max-width: 90%;
+    height: auto;
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-accent;
+}
+#secret-title {
+    color: $hh-accent;
+    padding-bottom: 1;
+}
+#secret-body {
+    height: auto;
+    max-height: 8;
+    padding-bottom: 1;
+}
+#secret-value {
+    background: $hh-background;
+    border: round $hh-border;
+    margin-bottom: 1;
+}
+#secret-value:focus {
+    border: round $hh-accent;
+}
+#secret-buttons {
+    height: auto;
+    align-horizontal: left;
+}
+
+/* --- modal: capabilities (read-only) --- */
+CapabilitiesScreen {
+    align: center middle;
+}
+#capabilities-panel {
+    width: 90;
+    max-width: 95%;
+    height: auto;
+    max-height: 90%;
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-accent;
+}
+#capabilities-title {
+    color: $hh-accent;
+    padding-bottom: 1;
+}
+#capabilities-body {
+    height: auto;
+    max-height: 30;
+}
+.cap-section {
+    color: $hh-accent;
+    padding-top: 1;
+}
+
 Button {
     margin-right: 2;
 }

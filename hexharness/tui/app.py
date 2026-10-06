@@ -17,9 +17,9 @@ from textual.widgets import Footer, Input, RichLog, Static
 from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.engine import Engine
 from hexharness.events.types import Event, EventType
-from hexharness.tui.approver import TUIApprover
+from hexharness.tui.approver import TUIApprover, TUISecretRequester
 from hexharness.tui.providers import build, entry, model_for, router_spec
-from hexharness.tui.screens import ProviderScreen
+from hexharness.tui.screens import CapabilitiesScreen, ProviderScreen
 
 DEFAULT_ENGAGEMENT = "engagements/example.engagement.yaml"
 
@@ -43,6 +43,7 @@ class HexTUI(App):
 
     BINDINGS = [
         Binding("ctrl+p", "providers", "Providers"),
+        Binding("ctrl+t", "capabilities", "Capabilities"),
         Binding("ctrl+k", "kill", "Kill switch"),
         Binding("ctrl+l", "clear", "Clear"),
         Binding("f2", "cycle_autonomy", "Autonomy"),
@@ -122,7 +123,7 @@ class HexTUI(App):
         provider = self._make_provider()  # may raise RuntimeError if a key is missing
         self.engine = Engine.from_engagement(
             self.engagement_path, provider=provider, requested_mode=self.mode,
-            approver=TUIApprover(self),
+            approver=TUIApprover(self), secret_requester=TUISecretRequester(self),
         )
         self.engine.events._bus.subscribe(self._on_event)
         self.loop = self.engine.loop(provider=provider, model=self._model_override(),
@@ -225,6 +226,19 @@ class HexTUI(App):
         self.loop = None
         self._sync_header()
         self._log(f"provider set: {self._provider_model()[0]}", _MUTED)
+
+    @work
+    async def action_capabilities(self) -> None:
+        # Build the engine so the panel reflects the live registry/vault; fall back to the
+        # static catalog if no provider key is configured yet (never crash the UI).
+        try:
+            self._ensure_engine()
+        except RuntimeError:
+            pass
+        provider, model = self._provider_model()
+        await self.push_screen_wait(
+            CapabilitiesScreen(engine=self.engine, provider=provider, model=model)
+        )
 
     async def action_kill(self) -> None:
         if self.engine is None:

@@ -23,22 +23,40 @@ from hexharness.tools.native import CweLookupTool, DnsLookupTool, PortScanTool
 from hexharness.tools.registry import ToolRegistry
 
 
-def default_registry(*, vault=None) -> ToolRegistry:
+def default_registry(*, vault=None, secret_requester=None, workspace: str | Path | None = None) -> ToolRegistry:
     from pathlib import Path
 
+    from hexharness.control.secrets import DenySecretRequester
+    from hexharness.control.vault import Vault
     from hexharness.knowledge import KnowledgeSearchTool, MitreAttackTool
     from hexharness.skills.engine import SkillRegistry
     from hexharness.skills.tool import SkillLookupTool
+    from hexharness.tools.native.exec import ExecCommandTool
+    from hexharness.tools.native.extend import McpConnectTool, SkillInstallTool
+    from hexharness.tools.native.fs import FileReadTool, FileWriteTool
 
     reg = ToolRegistry()
     executor = SandboxExecutor()
+    vault = vault or Vault()
+    secret_requester = secret_requester or DenySecretRequester()
+    workspace = Path(workspace or ".hexharness/workspace")
+    library = Path(__file__).parent / "skills" / "library"
+    skills = SkillRegistry().discover(library)
+
     # passive, no scope needed
     reg.register(CweLookupTool())
     reg.register(MitreAttackTool())
     reg.register(KnowledgeSearchTool())
-    skills = SkillRegistry().discover(Path(__file__).parent / "skills" / "library")
     reg.register(SkillLookupTool(skills))
-    # scope-sensitive / sandboxed
+    # file / code I/O, workspace-confined (write gated: INTRUSIVE + approval)
+    reg.register(FileReadTool(workspace))
+    reg.register(FileWriteTool(workspace))
+    # command execution, sandboxed (DESTRUCTIVE + approval)
+    reg.register(ExecCommandTool(executor))
+    # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
+    reg.register(SkillInstallTool(skills, library))
+    reg.register(McpConnectTool(reg, vault, secret_requester))
+    # scope-sensitive / sandboxed network
     reg.register(DnsLookupTool())
     reg.register(PortScanTool(executor))
     return reg
@@ -123,7 +141,12 @@ class Engine:
             await events.append(EventType.CHECKPOINT, {"reason": "kill-switch", "subagent": subagent})
 
         kill = KillSwitch(trigger_file=kill_trigger_file, checkpoint=_checkpoint)
-        reg = registry if registry is not None else default_registry(vault=vault)
+        # Per-engagement workspace so file/exec tools are isolated per engagement.
+        slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in eng.name.lower())
+        workspace = Path(".hexharness") / slug / "workspace"
+        reg = registry if registry is not None else default_registry(
+            vault=vault, secret_requester=secret_requester, workspace=workspace,
+        )
         return cls(
             engagement=eng, events=events, evidence=evidence, control=control,
             registry=reg, ctx=ctx, kill_switch=kill, vault=vault,

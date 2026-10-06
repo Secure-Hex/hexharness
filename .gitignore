@@ -16,3 +16,6 @@ __pycache__/
 
 # kill-switch trigger files
 *.kill
+
+# per-engagement tool workspace (file/exec tools)
+.hexharness/
