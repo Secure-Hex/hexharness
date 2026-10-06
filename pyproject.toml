@@ -23,10 +23,11 @@ reporting = ["jinja2>=3", "weasyprint>=60", "docxtpl>=0.16"]
 mcp = ["mcp>=1.0"]
 tui = ["textual>=0.60"]
 voice = ["sounddevice>=0.4", "faster-whisper>=1.0", "numpy>=1.26"]
+search = ["ddgs>=6.0"]  # free DuckDuckGo backend; Tavily/Exa need only an API key (stdlib HTTP)
 all = [
     "openai>=1.40", "google-genai>=0.3", "opentelemetry-sdk>=1.20",
     "websockets>=12", "jinja2>=3", "weasyprint>=60", "docxtpl>=0.16", "mcp>=1.0",
-    "textual>=0.60", "sounddevice>=0.4", "faster-whisper>=1.0", "numpy>=1.26",
+    "textual>=0.60", "sounddevice>=0.4", "faster-whisper>=1.0", "numpy>=1.26", "ddgs>=6.0",
 ]
 
 [project.scripts]

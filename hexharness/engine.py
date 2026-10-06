@@ -34,6 +34,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     from hexharness.tools.native.exec import ExecCommandTool
     from hexharness.tools.native.extend import McpConnectTool, SkillInstallTool
     from hexharness.tools.native.fs import FileReadTool, FileWriteTool
+    from hexharness.tools.native.websearch import WebSearchTool
 
     reg = ToolRegistry()
     executor = SandboxExecutor()
@@ -48,6 +49,8 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(MitreAttackTool())
     reg.register(KnowledgeSearchTool())
     reg.register(SkillLookupTool(skills))
+    # OSINT web search (ACTIVE, not scope-sensitive): free ddgs default, paid keys via vault
+    reg.register(WebSearchTool(vault))
     # file / code I/O, workspace-confined (write gated: INTRUSIVE + approval)
     reg.register(FileReadTool(workspace))
     reg.register(FileWriteTool(workspace))
