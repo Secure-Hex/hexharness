@@ -226,6 +226,8 @@ class HexTUI(App):
 
     def action_quit(self) -> None:
         self._save_session()  # persist the conversation before exiting
+        if self.engine is not None:
+            self.engine.close_sandbox()  # remove the session container; /workspace persists
         self.exit()
 
     def _render_suggest(self, items: list[str]) -> None:

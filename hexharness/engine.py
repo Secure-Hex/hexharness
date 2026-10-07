@@ -238,6 +238,14 @@ class Engine:
             "max_risk": engagement.roe.max_risk,
         })
 
+    def close_sandbox(self) -> None:
+        """Remove the session's long-lived exec_command container (sync; safe to call on
+        exit). Only the host-mounted workspace persists afterwards."""
+        tool = self.registry.get("exec_command")
+        executor = getattr(tool, "executor", None)
+        if executor is not None and hasattr(executor, "close_session"):
+            executor.close_session()
+
     def loop(self, *, provider: LLMProvider, model: str | None = None,
              on_text=None, on_thinking=None) -> AgentLoop:
         return AgentLoop(

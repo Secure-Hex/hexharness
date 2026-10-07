@@ -13,7 +13,7 @@ from hexharness.tools.base import RiskLevel, Tool
 
 class ExecCommandInput(BaseModel):
     argv: list[str] = Field(description="Command and args as a list (no shell), e.g. ['id']")
-    network: str = Field(default="bridge", description="Docker network mode ('bridge' or 'none')")
+    network: str = Field(default="bridge", description="(informational) the session container is always on the bridge network")
     timeout: int = Field(default=60, description="Seconds before the container is killed")
 
 
@@ -37,13 +37,13 @@ class ExecCommandTool(Tool):
     async def run(self, tool_input: dict) -> str:
         argv = tool_input["argv"]
         try:
-            result = await self.executor.run(
+            # One long-lived container per session: installs/state persist across calls
+            # (only /workspace survives after the session closes).
+            result = await self.executor.exec_in_session(
                 self.image,
                 argv,
-                network=tool_input.get("network", "bridge"),
                 timeout=tool_input.get("timeout", 60),
                 workspace=self.workspace,
-                drop_caps=False,  # full box: apt-get/dpkg and setuid helpers must work
             )
         except SandboxError as e:
             return f"sandbox unavailable: {e}"

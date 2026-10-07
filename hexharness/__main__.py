@@ -49,7 +49,10 @@ async def _run(args) -> str:
     )
     engine.kill_switch.install_signal_handler()
     engine.kill_switch.start_file_watch()
-    return await engine.loop(provider=provider, model=args.model).run(args.prompt)
+    try:
+        return await engine.loop(provider=provider, model=args.model).run(args.prompt)
+    finally:
+        engine.close_sandbox()  # remove the session container; /workspace persists
 
 
 async def _init(args) -> str:
