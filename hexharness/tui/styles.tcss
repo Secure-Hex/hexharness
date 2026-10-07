@@ -36,6 +36,16 @@ Screen {
     scrollbar-background: $hh-background;
 }
 
+/* live skill suggestions while typing a slash command */
+#slash-suggest {
+    display: none;
+    height: auto;
+    margin: 0 2;
+    padding: 0 1;
+    color: $hh-accent;
+    background: $hh-panel;
+}
+
 /* bordered prompt box, accent when focused */
 #prompt {
     dock: bottom;

@@ -79,6 +79,7 @@ class HexTUI(App):
         yield HexHeader(id="header")
         yield RichLog(id="transcript", wrap=True, markup=False, highlight=False)
         yield Static("", id="live")  # live-streaming model text for the current turn
+        yield Static("", id="slash-suggest")  # live skill suggestions while typing "/..."
         # multi-line, soft-wrapping, auto-growing prompt (Enter submits, Ctrl+J newline)
         yield PromptArea(id="prompt", soft_wrap=True)
         yield Footer()
@@ -180,6 +181,21 @@ class HexTUI(App):
             lib = Path(pkg.__file__).parent / "library"
             self._skills = SkillRegistry().discover(lib) if lib.is_dir() else SkillRegistry()
         return self._skills
+
+    @on(PromptArea.Changed, "#prompt")
+    def _prompt_changed(self, event: PromptArea.Changed) -> None:
+        """Live skill suggestions while typing a slash token (before the first space)."""
+        suggest = self.query_one("#slash-suggest", Static)
+        text = self.query_one("#prompt", PromptArea).text
+        if text.startswith("/") and " " not in text and "\n" not in text:
+            token = text[1:].lower()
+            names = [n for n in list_skills(self._skill_registry()) if n.lower().startswith(token)]
+            if "compact".startswith(token):
+                names.append("compact")  # built-in command, shown alongside skills
+            suggest.update("  ".join(f"/{n}" for n in names) if names else "(no match)")
+            suggest.display = True
+        else:
+            suggest.display = False
 
     @on(PromptArea.Submitted)
     def _submit(self, event: PromptArea.Submitted) -> None:

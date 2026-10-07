@@ -38,3 +38,21 @@ async def test_enter_submits_and_is_capturable():
         await pilot.pause()
         # the message exists with the text payload (handler wiring lives in the app)
         assert PromptArea.Submitted("x").text == "x"
+
+
+async def test_slash_suggestions_filter_live():
+    from hexharness.tui.app import HexTUI
+    from textual.widgets import Static
+
+    app = HexTUI()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        app.query_one("#prompt", PromptArea).text = "/s"
+        await pilot.pause()
+        sug = app.query_one("#slash-suggest", Static)
+        assert sug.display is True
+        text = str(sug.render())
+        assert "/sqli-triage" in text and "/subdomain-enumeration" in text
+        app.query_one("#prompt", PromptArea).text = "/s do it"  # space ends the token
+        await pilot.pause()
+        assert app.query_one("#slash-suggest", Static).display is False
