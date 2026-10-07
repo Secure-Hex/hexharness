@@ -24,6 +24,7 @@ daemon = ["websockets>=12"]
 reporting = ["jinja2>=3", "weasyprint>=60", "docxtpl>=0.16"]
 mcp = ["mcp>=1.0"]
 tui = ["textual>=0.60"]
+browser = ["playwright>=1.40"]  # browser tool; run `playwright install chromium` after
 voice = ["sounddevice>=0.4", "faster-whisper>=1.0", "numpy>=1.26"]
 search = ["ddgs>=6.0"]  # kept for back-compat; ddgs is now a core dep so web_search works out of the box
 all = [

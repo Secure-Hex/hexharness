@@ -36,6 +36,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     from hexharness.tools.native.extend import McpConnectTool, SkillInstallTool
     from hexharness.tools.native.fs import FileReadTool, FileWriteTool
     from hexharness.tools.native.binary import BinaryInfoTool, ChecksecTool, DisassembleTool
+    from hexharness.tools.native.browser import BrowserTool
     from hexharness.tools.native.postman import PostmanListTool, PostmanRunTool
     from hexharness.tools.native.recon import DnsEnumTool, SmbEnumTool, WhoisLookupTool
     from hexharness.tools.native.services import (
@@ -86,6 +87,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(FtpCheckTool())
     reg.register(SshInfoTool())
     reg.register(HttpProbeTool())
+    reg.register(BrowserTool(workspace))  # Playwright: interact + screenshots to the workspace
     # recon via kali sandbox (scope-sensitive)
     reg.register(DnsEnumTool())            # native resolver (dnspython), no sandbox
     reg.register(WhoisLookupTool())        # native WHOIS over TCP/43, no sandbox
