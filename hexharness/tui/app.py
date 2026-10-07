@@ -28,6 +28,7 @@ from hexharness.tui.screens import (
     ModeScreen,
     ProviderScreen,
     ScopeApprovalModal,
+    ScopeEditScreen,
 )
 
 DEFAULT_ENGAGEMENT = "engagements/example.engagement.yaml"
@@ -57,6 +58,7 @@ class HexTUI(App):
         Binding("ctrl+k", "kill", "Kill switch"),
         Binding("ctrl+l", "clear", "Clear"),
         Binding("ctrl+o", "mode", "Mode"),
+        Binding("ctrl+e", "edit_scope", "Edit scope", priority=True),  # TextArea also uses ctrl+e; app wins
         Binding("ctrl+r", "dictate", "Dictate"),
         Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
         Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
@@ -397,6 +399,39 @@ class HexTUI(App):
         self.mode = result
         self._reset_mode()  # drop the engine so the next run rebuilds with the new mode
         self._log(f"mode set: {self.mode.autonomy.name.lower()}/{self.mode.phase.name.lower()}", _MUTED)
+
+    @work(group="scope")
+    async def action_edit_scope(self) -> None:
+        """Manual scope editor: the operator edits scope directly (no model involved),
+        then we validate, persist to the engagement file, and apply it live if running.
+        This editor IS the human action, so applying needs no extra approval modal."""
+        from hexharness.engagement import Engagement
+        from hexharness.engagement_builder import EngagementSpec, render_yaml
+
+        base = self.engine.engagement if self.engine is not None else Engagement.load(self.engagement_path)
+        result = await self.push_screen_wait(ScopeEditScreen(engagement=base))
+        if result is None:
+            return
+        data = base.model_dump()
+        data["scope"] = result
+        try:
+            # model_validate accepts any string; render_yaml builds the runtime scope guard,
+            # so a bad CIDR / invalid scope raises HERE — before we persist or apply.
+            new_eng = Engagement.model_validate(data)
+            yaml_text = render_yaml(EngagementSpec.model_validate(new_eng.model_dump()))
+        except Exception as exc:  # noqa: BLE001 — surface the invalid scope, don't apply
+            self._log(f"invalid scope — not applied: {exc}", _DANGER)
+            return
+
+        Path(self.engagement_path).write_text(yaml_text)  # survives restart
+        if self.engine is not None:
+            await self.engine.apply_engagement(new_eng, approved_by="operator")
+            if self.loop is not None:
+                self.loop.ctx = self.engine.ctx  # live loop adopts the re-clamped context
+            # SCOPE_CHANGED is logged by the existing _on_event handler.
+        else:
+            self._log("scope saved — applies on the next run", _SUCCESS)
+            self._sync_header()
 
     @work(exclusive=True, group="dictate")
     async def action_dictate(self) -> None:

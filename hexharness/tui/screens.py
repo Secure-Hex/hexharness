@@ -588,3 +588,98 @@ class ScopeApprovalModal(ModalScreen[bool]):
 
     def action_ok(self) -> None:
         self.dismiss(True)
+
+
+class ScopeEditScreen(ModalScreen[dict]):
+    """Manual scope editor: the operator edits the engagement's domains / CIDRs /
+    exclusions directly and applies them WITHOUT involving the model. This dialog IS the
+    human action, so it needs no extra approval gate. Dismisses with the edited scope as
+    {"domains":[...], "cidrs":[...], "exclusions":[...]} on Apply, or None on Cancel/Esc.
+    CIDR validity is checked by the apply path, not here."""
+
+    BINDINGS = [("escape", "dismiss", "Cancel")]
+
+    # (scope key, row prefix, add-input placeholder)
+    _GROUPS = (
+        ("domains", "domain", "add a domain (e.g. app.example)"),
+        ("cidrs", "cidr", "add a CIDR (e.g. 10.0.0.0/24)"),
+        ("exclusions", "exclude", "add an exclusion (domain or CIDR)"),
+    )
+    _PREFIX = {k: p for k, p, _ in _GROUPS}
+
+    def __init__(self, *, engagement: Any) -> None:
+        super().__init__()
+        self._name = engagement.name
+        # Working copy — edits never touch the source engagement until the app applies.
+        self._scope = {
+            "domains": list(engagement.scope.domains),
+            "cidrs": list(engagement.scope.cidrs),
+            "exclusions": list(engagement.scope.exclusions),
+        }
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="scope-edit-panel"):
+            yield Static(f"Edit scope · {self._name}", id="scope-edit-title")
+            yield Static("Edit the engagement scope directly, then Apply. The model is not involved.",
+                         classes="dim")
+            with VerticalScroll(id="scope-edit-body"):
+                for key, _prefix, placeholder in self._GROUPS:
+                    with Horizontal(classes="scope-add-row"):
+                        yield Input(placeholder=placeholder, id=f"add-{key}")
+                        yield Button("Add", id=f"add-{key}-btn")
+                yield ListView(id="scope-entries")
+                yield Button("Remove selected", id="scope-remove-btn")
+            with Horizontal(id="scope-edit-buttons"):
+                yield Button("Apply", variant="primary", id="scope-apply-btn")
+                yield Button("Cancel", id="scope-edit-cancel-btn")
+
+    def on_mount(self) -> None:
+        self._refresh()
+
+    # --- the combined entry list (domain/cidr/exclude rows in group order) ---
+
+    def _entries(self) -> list[tuple[str, str]]:
+        return [(key, v) for key, _p, _ph in self._GROUPS for v in self._scope[key]]
+
+    def _refresh(self) -> None:
+        lst = self.query_one("#scope-entries", ListView)
+        lst.clear()
+        for i, (key, value) in enumerate(self._entries()):
+            lst.append(ListItem(Label(f"{self._PREFIX[key]}: {value}"), id=f"entry-{i}"))
+
+    def _add(self, key: str) -> None:
+        inp = self.query_one(f"#add-{key}", Input)
+        value = inp.value.strip()
+        if value and value not in self._scope[key]:
+            self._scope[key].append(value)
+        inp.value = ""
+        self._refresh()
+
+    def _remove_selected(self) -> None:
+        idx = self.query_one("#scope-entries", ListView).index
+        entries = self._entries()
+        if idx is None or not 0 <= idx < len(entries):
+            return
+        key, value = entries[idx]
+        self._scope[key].remove(value)
+        self._refresh()
+
+    # --- interaction (one dispatcher keeps the per-button @on handlers from double-firing) ---
+
+    @on(Input.Submitted)
+    def _input_submitted(self, event: Input.Submitted) -> None:
+        bid = event.input.id or ""
+        if bid.startswith("add-"):
+            self._add(bid.removeprefix("add-"))
+
+    @on(Button.Pressed)
+    def _pressed(self, event: Button.Pressed) -> None:
+        bid = event.button.id or ""
+        if bid == "scope-apply-btn":
+            self.dismiss(self._scope)
+        elif bid == "scope-edit-cancel-btn":
+            self.dismiss(None)
+        elif bid == "scope-remove-btn":
+            self._remove_selected()
+        elif bid.startswith("add-") and bid.endswith("-btn"):
+            self._add(bid.removeprefix("add-").removesuffix("-btn"))

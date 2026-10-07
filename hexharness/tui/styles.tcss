@@ -342,3 +342,33 @@ ScopeApprovalModal { align: center middle; }
 #scope-title { color: $hh-warning; padding-bottom: 1; }
 #scope-body { height: 1fr; }
 #scope-buttons { height: auto; padding-top: 1; align-horizontal: left; }
+
+/* modal: manual scope editor */
+ScopeEditScreen { align: center middle; }
+#scope-edit-panel {
+    width: 80;
+    max-width: 90%;
+    height: 90%;          /* definite height so the scroll flexes and buttons pin */
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-accent;
+}
+#scope-edit-title { color: $hh-accent; padding-bottom: 1; }
+#scope-edit-body { height: 1fr; }
+.scope-add-row { height: auto; align-horizontal: left; margin-bottom: 1; }
+.scope-add-row > Input {
+    width: 1fr;
+    background: $hh-background;
+    border: round $hh-border;
+}
+.scope-add-row > Input:focus { border: round $hh-accent; }
+#scope-entries {
+    height: auto;
+    max-height: 12;
+    background: $hh-background;
+    border: round $hh-border;
+    margin-bottom: 1;
+}
+#scope-entries > ListItem { background: $hh-background; color: $hh-text; padding: 0 1; }
+#scope-entries > ListItem.--highlight { background: $hh-border; color: $hh-accent; }
+#scope-edit-buttons { height: auto; padding-top: 1; align-horizontal: left; }
