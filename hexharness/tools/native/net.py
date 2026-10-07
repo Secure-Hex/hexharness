@@ -37,11 +37,19 @@ class DnsLookupTool(Tool):
 class PortScanInput(BaseModel):
     host: str = Field(description="Host/IP to scan (must be in engagement scope)")
     ports: str = Field(default="1-1000", description="nmap port spec, e.g. '22,80,443' or '1-1000'")
+    flags: list[str] = Field(
+        default_factory=list,
+        description="Extra nmap flags, e.g. ['-sS','-sV','-A','-O','--script','vuln']. "
+                    "Default is a SYN scan (-sS -Pn) when empty.",
+    )
 
 
 class PortScanTool(Tool):
     name = "port_scan"
-    description = "TCP port scan via nmap (sandboxed). Intrusive — requires approval."
+    description = (
+        "nmap port scan (sandboxed, raw sockets enabled). Pass any nmap flags via `flags` "
+        "(SYN/version/OS/NSE scripts, etc). Intrusive — requires approval."
+    )
     input_model = PortScanInput
     risk_level = RiskLevel.INTRUSIVE
     scope_sensitive = True
@@ -55,7 +63,11 @@ class PortScanTool(Tool):
     async def run(self, tool_input: dict) -> str:
         host = tool_input["host"]
         ports = tool_input.get("ports", "1-1000")
+        flags = list(tool_input.get("flags") or ["-sS", "-Pn"])  # model-chosen nmap flags
+        # argv is a LIST (no shell), so flags can't inject a shell command; the host is
+        # still the scope-checked target. NET_RAW lets SYN/OS-detection scans work.
         result = await self.executor.run(
-            self.image, ["-p", ports, "-Pn", host], network="bridge", timeout=180
+            self.image, [*flags, "-p", ports, host],
+            network="bridge", timeout=300, cap_add=["NET_RAW"],
         )
         return result.stdout if result.ok else f"scan failed (exit {result.exit_code}): {result.stderr}"

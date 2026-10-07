@@ -44,15 +44,23 @@ class SandboxExecutor:
         timeout: float | None = None,
         memory: str = "512m",
         pids_limit: int = 256,
+        cap_add: list[str] | None = None,
     ) -> SandboxResult:
         if not self.available():
             raise SandboxError("docker not found on PATH")
 
+        # Drop all caps, then add back only the ones the tool explicitly needs (e.g.
+        # NET_RAW for nmap SYN/OS scans). no-new-privileges is dropped when caps are
+        # granted, since it would block them from taking effect.
+        caps: list[str] = []
+        for c in cap_add or []:
+            caps += ["--cap-add", c]
+        security = [] if cap_add else ["--security-opt", "no-new-privileges"]
         cmd = [
             self.docker_bin, "run", "--rm",
             "--network", network,
-            "--security-opt", "no-new-privileges",
-            "--cap-drop", "ALL",
+            *security,
+            "--cap-drop", "ALL", *caps,
             "--memory", memory,
             "--pids-limit", str(pids_limit),
             image, *argv,

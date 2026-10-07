@@ -87,9 +87,9 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(SshInfoTool())
     reg.register(HttpProbeTool())
     # recon via kali sandbox (scope-sensitive)
-    reg.register(DnsEnumTool(executor, image=sandbox_image))
+    reg.register(DnsEnumTool())            # native resolver (dnspython), no sandbox
+    reg.register(WhoisLookupTool())        # native WHOIS over TCP/43, no sandbox
     reg.register(SmbEnumTool(executor, image=sandbox_image))
-    reg.register(WhoisLookupTool(executor, image=sandbox_image))
     reg.register(ShodanHostTool(vault))  # needs SHODAN_API_KEY → demos the out-of-band secret flow
     # binary / reversing static analysis, workspace-confined (ACTIVE, host subprocess)
     reg.register(BinaryInfoTool(workspace))

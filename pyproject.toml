@@ -8,6 +8,7 @@ dependencies = [
     "anthropic>=0.40",
     "pyyaml>=6",
     "ddgs>=6.0",  # free default web_search backend (Tavily/Exa optional, via stdlib HTTP + key)
+    "dnspython>=2.6",  # native dns_enum resolver (no sandbox tool needed)
 ]
 
 [project.optional-dependencies]
