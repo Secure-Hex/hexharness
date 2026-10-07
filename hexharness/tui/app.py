@@ -84,7 +84,8 @@ class HexTUI(App):
         ("Ctrl+L", "Clear transcript"),
         ("Ctrl+Q", "Quit"),
         ("Enter", "Run the prompt  ·  Ctrl+J: newline"),
-        ("/name", "Invoke a skill  ·  /compact: compact context  ·  /: list"),
+        ("/name", "Invoke a skill  ·  /compact · /save · /: list"),
+        ("Session", "Auto-saves each turn & on quit; resumes on reopening the engagement"),
         ("↑/↓, Tab", "Navigate & complete slash suggestions"),
     ]
 
@@ -109,6 +110,8 @@ class HexTUI(App):
         self._thinking_buf = ""   # accumulating model reasoning for the current turn
         self._saved_conversation = None  # carried across a loop rebuild (provider change)
         self._saved_tokens = 0
+        self._eng_name = ""              # engagement name = session key for persistence
+        self._resume_conv = None         # conversation loaded from a saved session
 
     # --- layout ---
 
@@ -149,9 +152,14 @@ class HexTUI(App):
 
     def _slash_matches(self, prefix: str) -> list[str]:
         names = sorted(n for n in list_skills(self._skill_registry()) if n.lower().startswith(prefix.lower()))
-        if "compact".startswith(prefix.lower()):
-            names.append("compact")  # built-in command
+        for cmd in ("compact", "save"):  # built-in commands shown alongside skills
+            if cmd.startswith(prefix.lower()):
+                names.append(cmd)
         return names
+
+    def action_quit(self) -> None:
+        self._save_session()  # persist the conversation before exiting
+        self.exit()
 
     def _render_suggest(self, items: list[str]) -> None:
         suggest = self.query_one("#slash-suggest", Static)
@@ -239,12 +247,27 @@ class HexTUI(App):
         # Idempotent: build the engine if missing, and (re)build the loop if missing,
         # carrying any saved conversation across a provider change.
         if self.engine is None:
+            from hexharness import session as sess
+            from hexharness.engagement import Engagement
+
+            self._eng_name = Engagement.load(self.engagement_path).name
+            resuming = sess.exists(self._eng_name)
+            sess.db_path(self._eng_name).parent.mkdir(parents=True, exist_ok=True)
             provider = self._make_provider()  # may raise RuntimeError if a key is missing
             self.engine = Engine.from_engagement(
                 self.engagement_path, provider=provider, requested_mode=self.mode,
                 approver=TUIApprover(self), secret_requester=TUISecretRequester(self),
+                db=str(sess.db_path(self._eng_name)),  # file-backed => events + findings persist
             )
             self.engine.events._bus.subscribe(self._on_event)
+            if resuming:
+                from hexharness.recovery.snapshot import Recovery
+
+                state = Recovery.rebuild(self.engine.events.all())
+                self.engine.control.budget.tokens_used = state.tokens_spent
+                self._resume_conv = sess.load_conversation(self._eng_name)
+                self._log(f"resumed session · {len(self.engine.events.all())} events · "
+                          f"{len(self.engine.evidence.confirmed())} confirmed findings", _SUCCESS)
         if self.loop is None:
             provider = self._make_provider()
             self.loop = self.engine.loop(provider=provider, model=self._model_override(),
@@ -253,7 +276,16 @@ class HexTUI(App):
                 self.loop.conversation = self._saved_conversation
                 self.loop.last_input_tokens = self._saved_tokens
                 self._saved_conversation = None
+            elif self._resume_conv is not None:
+                self.loop.conversation = self._resume_conv
+                self._resume_conv = None
         self._sync_header()
+
+    def _save_session(self) -> None:
+        if self.loop is not None and self._eng_name:
+            from hexharness import session as sess
+
+            sess.save_conversation(self._eng_name, self.loop.conversation)
 
     def _set_status(self, text: str, style: str = _MUTED) -> None:
         self.query_one("#status", Static).update(Text(text, style=style))
@@ -312,6 +344,10 @@ class HexTUI(App):
 
         if prompt in ("/compact", "/compact "):
             self._compact()
+            return
+        if prompt in ("/save", "/save "):
+            self._save_session()
+            self._log("session saved — resume by reopening this engagement", _SUCCESS)
             return
 
         reg = self._skill_registry()
@@ -387,6 +423,7 @@ class HexTUI(App):
             box.disabled = False
             box.focus()
             self._set_status("ready — type a prompt", _MUTED)
+            self._save_session()  # auto-save the conversation after each turn
 
     def _on_event(self, event: Event) -> None:
         """Bus subscriber — runs on the app loop, so writing widgets here is safe."""
