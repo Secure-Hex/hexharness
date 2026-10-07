@@ -70,9 +70,14 @@ class ControlPlane:
                 if spent:
                     decision = Decision.deny("budget", spent)
 
-            # HITL — resolve ASK, and always confirm a requires_approval tool.
+            # HITL — resolve ASK, and confirm a requires_approval tool. BYPASS autonomy
+            # skips the prompt: the operator chose "run without asking" (and the ROE had to
+            # permit bypass for this mode to be active). Scope + ROE max_risk still bind.
+            from hexharness.control.policy import Autonomy
+
+            bypass = ctx.mode.autonomy is Autonomy.BYPASS
             needs_human = decision.effect is Effect.ASK or (
-                decision.effect is not Effect.DENY and tool.requires_approval
+                decision.effect is not Effect.DENY and tool.requires_approval and not bypass
             )
             if needs_human:
                 ok = await self.approver.confirm(

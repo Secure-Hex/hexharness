@@ -65,3 +65,25 @@ async def test_unknown_tool_fail_closed():
     assert out == "handled"
     # no tool ever started
     assert not [e for e in events.all() if e.type is EventType.TOOL_STARTED]
+
+
+async def test_bypass_skips_requires_approval_hitl():
+    """In BYPASS autonomy the operator chose 'run without asking', so a requires_approval
+    tool is allowed without the HITL prompt — but scope and ROE max_risk still bind."""
+    from hexharness.control.hitl import CallbackApprover
+    from hexharness.control.policy import Autonomy, Phase
+    from hexharness.control.roe import ROE
+
+    calls = []
+    cp, events = make_control(
+        roe=ROE(max_risk=RiskLevel.DESTRUCTIVE, max_autonomy=Autonomy.BYPASS, max_phase=Phase.BYPASS),
+        approver=CallbackApprover(lambda **k: calls.append(k) or True),
+    )
+    tool = SpyTool("exec", RiskLevel.INTRUSIVE)
+    tool.requires_approval = True
+
+    d_bypass = await cp.authorize(ctx(Mode(Autonomy.BYPASS, Phase.BYPASS)), tool, {})
+    assert d_bypass.allowed and calls == []            # no prompt in bypass
+
+    d_auto = await cp.authorize(ctx(Mode(Autonomy.AUTO, Phase.BYPASS)), tool, {})
+    assert d_auto.allowed and len(calls) == 1          # prompt in non-bypass
