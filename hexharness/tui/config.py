@@ -46,6 +46,18 @@ def save_selection(selection: dict) -> None:
     _write(config_path(), lambda data: data.__setitem__("provider", sel))
 
 
+def load_mode() -> dict | None:
+    """The last requested mode {autonomy, phase}, reused across sessions."""
+    try:
+        return json.loads(config_path().read_text()).get("mode")
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def save_mode(autonomy: str, phase: str) -> None:
+    _write(config_path(), lambda data: data.__setitem__("mode", {"autonomy": autonomy, "phase": phase}))
+
+
 def load_custom_providers() -> list[dict]:
     """The saved catalog of bring-your-own providers {name, base_url, model, api_key}."""
     try:

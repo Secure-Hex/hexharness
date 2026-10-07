@@ -23,3 +23,10 @@ def test_custom_provider_key_never_persisted(tmp_path, monkeypatch):
 def test_missing_config_returns_none(tmp_path, monkeypatch):
     monkeypatch.setenv("HEXHARNESS_CONFIG", str(tmp_path / "nope.json"))
     assert load_selection() is None
+
+
+def test_mode_roundtrips(tmp_path, monkeypatch):
+    from hexharness.tui.config import load_mode, save_mode
+    monkeypatch.setenv("HEXHARNESS_CONFIG", str(tmp_path / "config.json"))
+    save_mode("bypass", "exploitation")
+    assert load_mode() == {"autonomy": "bypass", "phase": "exploitation"}

@@ -93,7 +93,7 @@ class HexTUI(App):
     def __init__(self, *, engagement: str | Path = DEFAULT_ENGAGEMENT) -> None:
         super().__init__()
         self.engagement_path = str(engagement)
-        self.mode = Mode(autonomy=Autonomy.INTERACTIVE, phase=Phase.RECON)
+        self.mode = self._load_mode()
         self.engine: Engine | None = None
         self.loop = None
         from hexharness.tui.config import load_selection
@@ -510,6 +510,18 @@ class HexTUI(App):
         self._sync_header()
         self._log(f"provider set: {self._provider_model()[0]}  (saved for next session)", _MUTED)
 
+    @staticmethod
+    def _load_mode() -> Mode:
+        from hexharness.tui.config import load_mode
+
+        m = load_mode()
+        if m:
+            try:
+                return Mode(autonomy=Autonomy[m["autonomy"].upper()], phase=Phase[m["phase"].upper()])
+            except Exception:  # noqa: BLE001 — bad/old value => default
+                pass
+        return Mode(autonomy=Autonomy.INTERACTIVE, phase=Phase.RECON)
+
     def _current_roe(self) -> dict:
         from hexharness.engagement import Engagement
 
@@ -543,6 +555,9 @@ class HexTUI(App):
         if result is None:
             return
         self.mode = result["mode"]
+        from hexharness.tui.config import save_mode
+
+        save_mode(self.mode.autonomy.name.lower(), self.mode.phase.name.lower())  # persist across sessions
         await self._apply_roe(result["roe"])   # raise/lower the hard ceiling
         self._reset_mode()                       # re-clamp the ctx mode to the ROE, in place
         self._log(f"mode set: {self.mode.autonomy.name.lower()}/{self.mode.phase.name.lower()}", _MUTED)
