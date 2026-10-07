@@ -15,6 +15,7 @@ from textual.widgets import TextArea
 class PromptArea(TextArea):
     MIN_ROWS = 1
     MAX_ROWS = 12  # beyond this the box scrolls internally instead of growing further
+    completer = None  # app sets this: callable(prefix) -> top match | None (for Tab-complete)
 
     class Submitted(Message):
         def __init__(self, text: str) -> None:
@@ -40,6 +41,16 @@ class PromptArea(TextArea):
         self.styles.height = rows + 2  # + rounded border (top + bottom)
 
     async def _on_key(self, event: events.Key) -> None:
+        if event.key == "tab" and self.completer is not None:
+            text = self.text
+            if text.startswith("/") and " " not in text and "\n" not in text:
+                match = self.completer(text[1:])
+                if match:
+                    event.prevent_default()
+                    event.stop()
+                    self.text = f"/{match} "
+                    self.move_cursor(self.document.end)
+                    return
         if event.key == "enter":
             event.prevent_default()
             event.stop()

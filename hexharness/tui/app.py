@@ -86,8 +86,20 @@ class HexTUI(App):
 
     def on_mount(self) -> None:
         self._sync_header()
-        self.query_one("#prompt", PromptArea).focus()
+        prompt = self.query_one("#prompt", PromptArea)
+        prompt.completer = self._complete_slash  # Tab completes a slash skill to the top match
+        prompt.focus()
         self._log("HexHarness ready. Ctrl+P to pick a provider, then type a task.", _MUTED)
+
+    def _slash_matches(self, prefix: str) -> list[str]:
+        names = sorted(n for n in list_skills(self._skill_registry()) if n.lower().startswith(prefix.lower()))
+        if "compact".startswith(prefix.lower()):
+            names.append("compact")  # built-in command
+        return names
+
+    def _complete_slash(self, prefix: str) -> str | None:
+        matches = self._slash_matches(prefix)
+        return matches[0] if matches else None
 
     # --- header ---
 
@@ -188,11 +200,9 @@ class HexTUI(App):
         suggest = self.query_one("#slash-suggest", Static)
         text = self.query_one("#prompt", PromptArea).text
         if text.startswith("/") and " " not in text and "\n" not in text:
-            token = text[1:].lower()
-            names = [n for n in list_skills(self._skill_registry()) if n.lower().startswith(token)]
-            if "compact".startswith(token):
-                names.append("compact")  # built-in command, shown alongside skills
-            suggest.update("  ".join(f"/{n}" for n in names) if names else "(no match)")
+            names = self._slash_matches(text[1:])
+            suggest.update(("  ".join(f"/{n}" for n in names) + "   ·  Tab to complete")
+                           if names else "(no match)")
             suggest.display = True
         else:
             suggest.display = False

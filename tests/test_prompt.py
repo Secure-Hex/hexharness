@@ -56,3 +56,18 @@ async def test_slash_suggestions_filter_live():
         app.query_one("#prompt", PromptArea).text = "/s do it"  # space ends the token
         await pilot.pause()
         assert app.query_one("#slash-suggest", Static).display is False
+
+
+async def test_tab_completes_slash_to_top_match():
+    from hexharness.tui.app import HexTUI
+
+    app = HexTUI()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        box = app.query_one("#prompt", PromptArea)
+        box.focus()
+        box.text = "/sq"
+        await pilot.pause()
+        await pilot.press("tab")
+        await pilot.pause()
+        assert box.text == "/sqli-triage "   # completed to the top match + trailing space
