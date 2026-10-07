@@ -97,6 +97,30 @@ class AgentLoop:
         )
         return before - len(self.conversation)
 
+    def _system_with_scope(self) -> str:
+        """System prompt + the live engagement boundary (scope, ROE, mode) so the model
+        knows where it may act and does not waste turns on auto-denied targets."""
+        scope = self.control.scope_guard.scope
+        roe = self.control.roe
+        lines = [self.system, "", "## Engagement boundary (ENFORCED — out-of-scope or over-ROE actions are auto-denied)"]
+        if scope.domains:
+            lines.append("In-scope domains: " + ", ".join(scope.domains))
+        if scope.cidrs:
+            lines.append("In-scope CIDRs: " + ", ".join(scope.cidrs))
+        if scope.exclusions:
+            lines.append("EXCLUDED (never touch): " + ", ".join(scope.exclusions))
+        if not scope.domains and not scope.cidrs:
+            lines.append("In-scope targets: (none set — scope-sensitive tools will be denied)")
+        lines.append(
+            f"ROE ceiling: max_risk={roe.max_risk.name.lower()}, "
+            f"max_autonomy={roe.max_autonomy.name.lower()}, max_phase={roe.max_phase.name.lower()}"
+        )
+        lines.append(
+            f"Current mode: {self.ctx.mode.autonomy.name.lower()}/{self.ctx.mode.phase.name.lower()}. "
+            "Act only within this scope and ROE; do not attempt targets or risk levels beyond them."
+        )
+        return "\n".join(lines)
+
     async def run(self, user_prompt: str) -> str:
         from hexharness.providers.context_window import should_compact
 
@@ -106,13 +130,14 @@ class AgentLoop:
             await self.compact(reason="auto")
         self.conversation.append(Message.user_text(user_prompt))
         messages = self.conversation
+        system = self._system_with_scope()  # rebuilt each turn so scope/ROE changes show up
 
         for _ in range(self.max_iterations):
             if self.kill_switch and self.kill_switch.triggered:
                 return f"[killed: {self.kill_switch.reason}]"
 
             resp = await self.provider.complete(
-                messages, tools=self.registry.specs(), system=self.system, model=self.model,
+                messages, tools=self.registry.specs(), system=system, model=self.model,
                 on_text=self.on_text, on_thinking=self.on_thinking,
             )
             self.last_input_tokens = resp.usage.input_tokens
