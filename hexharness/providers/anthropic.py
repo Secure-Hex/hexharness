@@ -77,7 +77,7 @@ class AnthropicProvider:
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not key:
             raise RuntimeError("ANTHROPIC_API_KEY not set")
-        self._client = AsyncAnthropic(api_key=key)
+        self._client = AsyncAnthropic(api_key=key, max_retries=1, timeout=60.0)
         self.default_model = default_model or os.environ.get(
             "HEXHARNESS_MODEL", "claude-sonnet-4-5"
         )

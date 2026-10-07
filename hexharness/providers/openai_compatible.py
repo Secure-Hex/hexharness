@@ -37,7 +37,9 @@ class OpenAICompatibleProvider:
             raise RuntimeError(f"{api_key_env or 'api_key'} not set for provider {name!r}")
         self.name = name
         self.default_model = default_model
-        self._client = AsyncOpenAI(api_key=key, base_url=base_url, timeout=90, max_retries=1)
+        # short connect timeout so an unreachable gateway fails fast instead of hanging
+        self._client = AsyncOpenAI(api_key=key, base_url=base_url, max_retries=1,
+                                   timeout=60.0)
 
     async def complete(
         self,

@@ -28,7 +28,7 @@ class OllamaProvider:
         from openai import AsyncOpenAI
 
         self._client = AsyncOpenAI(
-            timeout=90, max_retries=1,
+            max_retries=1, timeout=60.0,
             base_url=base_url or os.environ.get("OLLAMA_BASE_URL", DEFAULT_BASE_URL),
             api_key="ollama",  # ponytail: local endpoint ignores the key but the SDK requires one.
         )

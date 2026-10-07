@@ -6,6 +6,7 @@ subscriber streams colored control-plane events into the transcript live.
 """
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from rich.markdown import Markdown
@@ -162,6 +163,21 @@ class HexTUI(App):
         prompt.nav_fn = self._slash_nav          # up/down move the selection
         prompt.focus()
         self._log("HexHarness ready. Ctrl+P to pick a provider, then type a task.", _MUTED)
+        self._announce_saved_session()
+
+    def _announce_saved_session(self) -> None:
+        """At launch, tell the operator if a saved session will resume (it loads lazily
+        on the first prompt, so without this notice it isn't visible up front)."""
+        try:
+            from hexharness import session as sess
+            from hexharness.engagement import Engagement
+
+            name = Engagement.load(self.engagement_path).name
+            if sess.exists(name):
+                self._log(f"↩ saved session for '{name}' found — it resumes on your first prompt "
+                          "(conversation, findings and history).", _SUCCESS)
+        except Exception:  # noqa: BLE001 — a missing/bad engagement file is not fatal here
+            pass
 
     def _slash_token(self) -> str | None:
         """The slash prefix currently being typed, or None if not in slash mode."""
@@ -443,12 +459,17 @@ class HexTUI(App):
         self._set_status("⣾ working…", _ACCENT)
         try:
             self._ensure_engine()
-            result = await self.loop.run(prompt)
+            # Hard ceiling: a turn can never hang the UI forever, whatever the cause
+            # (provider, network, a stuck tool). Ctrl+X cancels sooner.
+            result = await asyncio.wait_for(self.loop.run(prompt), timeout=600)
             self._flush_live()
             # Streaming already showed every turn's text; only write the return value
             # when nothing streamed (e.g. a provider that doesn't support on_text yet).
             if not self._streamed:
                 self._log_markdown(result or "(no output)")
+        except asyncio.TimeoutError:
+            self._log("turn timed out (no response in 600s) — provider unreachable? "
+                      "Try Ctrl+P to switch provider", _DANGER)
         except RuntimeError as exc:
             # Most likely a missing API key — point the operator at the provider screen.
             self._log(f"provider error: {exc}  (Ctrl+P to configure)", _DANGER)
