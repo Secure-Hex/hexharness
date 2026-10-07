@@ -476,16 +476,7 @@ class HexTUI(App):
             self._log("scope change rejected", _MUTED)
             return
         if self.engagement_path is None:
-            # Configuring from a blank launch: rebuild a file-backed engine under the new
-            # engagement (so its audit log + conversation persist under its own slug),
-            # carrying the drafting conversation forward.
-            if self.loop is not None:
-                self._saved_conversation = self.loop.conversation
-                self._saved_tokens = self.loop.last_input_tokens
-            self.engagement_path = path
-            self.engine = None
-            self.loop = None
-            self._ensure_engine()
+            self._activate_from_file(path)
             self._log(f"engagement configured: {eng.name} — scope is now active", _SUCCESS)
             return
         await self.engine.apply_engagement(eng, approved_by="operator")
@@ -631,6 +622,24 @@ class HexTUI(App):
                 pass
         return Mode(autonomy=Autonomy.INTERACTIVE, phase=Phase.RECON)
 
+    def _activate_from_file(self, path: str) -> None:
+        """Switch from a blank/unconfigured engine to a file-backed one under `path`,
+        carrying the current conversation forward. The new engine persists its audit log
+        + conversation under the engagement's own slug (see _ensure_engine)."""
+        if self.loop is not None:
+            self._saved_conversation = self.loop.conversation
+            self._saved_tokens = self.loop.last_input_tokens
+        self.engagement_path = path
+        self.engine = None
+        self.loop = None
+        self._ensure_engine()
+
+    def _engagement_file(self, name: str) -> str:
+        """Where a newly-configured engagement is written when launched blank."""
+        from hexharness.engagement_builder import _slug
+
+        return str(Path("engagements") / f"{_slug(name)}.engagement.yaml")
+
     def _current_roe(self) -> dict:
         from hexharness.engagement import Engagement
 
@@ -654,8 +663,13 @@ class HexTUI(App):
         except Exception as exc:  # noqa: BLE001
             self._log(f"invalid ROE — not applied: {exc}", _DANGER)
             return
-        Path(self.engagement_path).write_text(yaml_text)
-        if self.engine is not None:
+        blank = self.engagement_path is None
+        target = self.engagement_path or self._engagement_file(new_eng.name)
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        Path(target).write_text(yaml_text)
+        if blank:
+            self._activate_from_file(target)  # blank -> file-backed engine under its slug
+        elif self.engine is not None:
             await self.engine.apply_engagement(new_eng, approved_by="operator")
 
     @work
@@ -694,8 +708,14 @@ class HexTUI(App):
             self._log(f"invalid engagement — not applied: {exc}", _DANGER)
             return
 
-        Path(self.engagement_path).write_text(yaml_text)  # survives restart
-        if self.engine is not None:
+        blank = self.engagement_path is None
+        target = self.engagement_path or self._engagement_file(new_eng.name)
+        Path(target).parent.mkdir(parents=True, exist_ok=True)
+        Path(target).write_text(yaml_text)  # survives restart
+        if blank:
+            self._activate_from_file(target)  # blank -> file-backed engine under its slug
+            self._log(f"engagement configured: {new_eng.name} — scope is now active", _SUCCESS)
+        elif self.engine is not None:
             await self.engine.apply_engagement(new_eng, approved_by="operator")
             if self.loop is not None:
                 self.loop.ctx = self.engine.ctx  # live loop adopts the re-clamped context
