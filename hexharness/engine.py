@@ -35,6 +35,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     from hexharness.tools.native.exec import ExecCommandTool
     from hexharness.tools.native.extend import McpConnectTool, SkillInstallTool
     from hexharness.tools.native.fs import FileReadTool, FileWriteTool
+    from hexharness.tools.native.postman import PostmanListTool, PostmanRunTool
     from hexharness.tools.native.websearch import WebSearchTool
 
     reg = ToolRegistry()
@@ -64,6 +65,9 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
     reg.register(SkillInstallTool(skills, library))
     reg.register(McpConnectTool(reg, vault, secret_requester))
+    # API testing via Postman collections (list passive; run intrusive + scope-checked)
+    reg.register(PostmanListTool())
+    reg.register(PostmanRunTool())
     # scope-sensitive / sandboxed network
     reg.register(DnsLookupTool())
     reg.register(PortScanTool(executor))
