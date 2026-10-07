@@ -484,7 +484,8 @@ class HexTUI(App):
         if result is None:
             return
         data = base.model_dump()
-        data["scope"] = result
+        data["scope"] = result["scope"]
+        data["roe"].update(result["roe"])  # new ceiling; keep existing windows
         try:
             # model_validate accepts any string; render_yaml builds the runtime scope guard,
             # so a bad CIDR / invalid scope raises HERE — before we persist or apply.

@@ -34,7 +34,7 @@ async def test_edit_applies_and_persists_scope():
         app.engine = Engine.from_engagement(EXAMPLE, provider=None)
 
         async def edit(screen):
-            return {"domains": ["new.example"], "cidrs": [], "exclusions": []}
+            return {"scope": {"domains": ["new.example"], "cidrs": [], "exclusions": []}, "roe": {"max_risk": "active", "max_autonomy": "interactive", "max_phase": "enumeration"}}
 
         app.push_screen_wait = edit
 
@@ -70,7 +70,7 @@ async def test_invalid_cidr_not_applied():
         before = list(app.engine.engagement.scope.cidrs)
 
         async def edit(screen):
-            return {"domains": ["acme.example"], "cidrs": ["not-a-cidr"], "exclusions": []}
+            return {"scope": {"domains": ["acme.example"], "cidrs": ["not-a-cidr"], "exclusions": []}, "roe": {"max_risk": "active", "max_autonomy": "interactive", "max_phase": "enumeration"}}
 
         app.push_screen_wait = edit
 

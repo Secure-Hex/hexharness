@@ -9,7 +9,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, ListItem, ListView, SelectionList, Static
+from textual.widgets import Button, Input, Label, ListItem, ListView, Select, SelectionList, Static
 
 from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.tui.providers import ProviderEntry, all_entries, detect, model_for, register
@@ -631,10 +631,21 @@ class ScopeEditScreen(ModalScreen[dict]):
             "cidrs": list(engagement.scope.cidrs),
             "exclusions": list(engagement.scope.exclusions),
         }
+        self._roe = {
+            "max_risk": engagement.roe.max_risk,
+            "max_autonomy": engagement.roe.max_autonomy,
+            "max_phase": engagement.roe.max_phase,
+        }
+
+    _ROE_CHOICES = {
+        "max_risk": ("passive", "active", "intrusive", "destructive"),
+        "max_autonomy": ("plan", "report", "interactive", "auto", "bypass"),
+        "max_phase": ("recon", "enumeration", "exploitation", "post_exploitation", "reporting", "bypass"),
+    }
 
     def compose(self) -> ComposeResult:
         with Vertical(id="scope-edit-panel"):
-            yield Static(f"Edit scope · {self._name}", id="scope-edit-title")
+            yield Static(f"Edit scope & ROE · {self._name}", id="scope-edit-title")
             yield Static("Edit the engagement scope directly, then Apply. The model is not involved.",
                          classes="dim")
             with VerticalScroll(id="scope-edit-body"):
@@ -644,6 +655,12 @@ class ScopeEditScreen(ModalScreen[dict]):
                         yield Button("Add", id=f"add-{key}-btn")
                 yield ListView(id="scope-entries")
                 yield Button("Remove selected", id="scope-remove-btn")
+                yield Static("ROE ceiling (the hard cap — raise it to allow riskier tools)",
+                             classes="cap-section")
+                for field, choices in self._ROE_CHOICES.items():
+                    yield Label(f"  {field}")
+                    yield Select([(c, c) for c in choices], value=self._roe[field],
+                                 allow_blank=False, id=f"roe-{field.replace('_', '-')}")
             with Horizontal(id="scope-edit-buttons"):
                 yield Button("Apply", variant="primary", id="scope-apply-btn")
                 yield Button("Cancel", id="scope-edit-cancel-btn")
@@ -692,7 +709,9 @@ class ScopeEditScreen(ModalScreen[dict]):
     async def _pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id or ""
         if bid == "scope-apply-btn":
-            self.dismiss(self._scope)
+            roe = {f: self.query_one(f"#roe-{f.replace('_', '-')}", Select).value
+                   for f in self._ROE_CHOICES}
+            self.dismiss({"scope": self._scope, "roe": roe})
         elif bid == "scope-edit-cancel-btn":
             self.dismiss(None)
         elif bid == "scope-remove-btn":
