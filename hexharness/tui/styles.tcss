@@ -372,3 +372,16 @@ ScopeEditScreen { align: center middle; }
 #scope-entries > ListItem { background: $hh-background; color: $hh-text; padding: 0 1; }
 #scope-entries > ListItem.--highlight { background: $hh-border; color: $hh-accent; }
 #scope-edit-buttons { height: auto; padding-top: 1; align-horizontal: left; }
+
+/* toggleable commands side panel (Ctrl+B) */
+#command-panel {
+    display: none;
+    dock: right;
+    width: 46;
+    max-width: 60%;
+    height: 100%;
+    padding: 1 2;
+    background: $hh-panel;
+    border-left: round $hh-accent;
+    color: $hh-text;
+}

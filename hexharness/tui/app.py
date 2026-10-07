@@ -51,19 +51,40 @@ class HexTUI(App):
     TITLE = "HexHarness"
     ENABLE_COMMAND_PALETTE = False  # free ctrl+p for the provider screen
 
+    # The full keybind list lives in the toggleable Commands side panel (Ctrl+B); the
+    # footer stays uncluttered — only the toggle is shown there (show=False elsewhere).
     BINDINGS = [
-        Binding("ctrl+p", "providers", "Providers"),
-        Binding("ctrl+t", "capabilities", "Capabilities"),
-        Binding("ctrl+f", "findings", "Findings"),
-        Binding("ctrl+k", "kill", "Kill switch"),
-        Binding("ctrl+l", "clear", "Clear"),
-        Binding("ctrl+o", "mode", "Mode"),
-        Binding("ctrl+e", "edit_scope", "Edit scope", priority=True),  # TextArea also uses ctrl+e; app wins
-        Binding("ctrl+r", "dictate", "Dictate"),
+        Binding("ctrl+b", "commands", "Commands", priority=True),
+        Binding("ctrl+p", "providers", "Providers", show=False),
+        Binding("ctrl+t", "capabilities", "Capabilities", show=False),
+        Binding("ctrl+f", "findings", "Findings", show=False),
+        Binding("ctrl+k", "kill", "Kill switch", show=False),
+        Binding("ctrl+l", "clear", "Clear", show=False),
+        Binding("ctrl+o", "mode", "Mode", show=False),
+        Binding("ctrl+e", "edit_scope", "Edit scope", priority=True, show=False),  # TextArea also uses ctrl+e
+        Binding("ctrl+r", "dictate", "Dictate", show=False),
         Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
         Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
-        Binding("ctrl+q", "quit", "Quit"),
+        Binding("ctrl+q", "quit", "Quit", show=False),
         Binding("ctrl+c", "quit", "Quit", show=False),
+    ]
+
+    # Shown in the Commands side panel (key, description). Includes prompt + slash commands
+    # that aren't key bindings.
+    COMMANDS = [
+        ("Ctrl+B", "Toggle this commands panel"),
+        ("Ctrl+P", "Pick / register a provider"),
+        ("Ctrl+E", "Edit scope (add/remove domains, CIDRs, exclusions)"),
+        ("Ctrl+O", "Set mode (autonomy / phase)"),
+        ("Ctrl+T", "Capabilities (tools, skills, secrets, web backend)"),
+        ("Ctrl+F", "Findings (confirm / reject candidates)"),
+        ("Ctrl+R", "Dictate (push-to-talk, local)"),
+        ("Ctrl+K", "Kill switch"),
+        ("Ctrl+L", "Clear transcript"),
+        ("Ctrl+Q", "Quit"),
+        ("Enter", "Run the prompt  ·  Ctrl+J: newline"),
+        ("/name", "Invoke a skill  ·  /compact: compact context  ·  /: list"),
+        ("↑/↓, Tab", "Navigate & complete slash suggestions"),
     ]
 
     def __init__(self, *, engagement: str | Path = DEFAULT_ENGAGEMENT) -> None:
@@ -94,7 +115,16 @@ class HexTUI(App):
         yield Static("", id="slash-suggest")  # live skill suggestions while typing "/..."
         # multi-line, soft-wrapping, auto-growing prompt (Enter submits, Ctrl+J newline)
         yield PromptArea(id="prompt", soft_wrap=True)
+        yield Static(self._commands_text(), id="command-panel")  # toggleable (Ctrl+B)
         yield Footer()
+
+    def _commands_text(self) -> str:
+        rows = "\n".join(f"{k:<11} {d}" for k, d in self.COMMANDS)
+        return f"Commands   (Ctrl+B to close)\n\n{rows}"
+
+    def action_commands(self) -> None:
+        panel = self.query_one("#command-panel", Static)
+        panel.display = not panel.display
 
     def on_mount(self) -> None:
         self._sync_header()
