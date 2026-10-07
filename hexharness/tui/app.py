@@ -92,9 +92,11 @@ class HexTUI(App):
         ("↑/↓, Tab", "Navigate & complete slash suggestions"),
     ]
 
-    def __init__(self, *, engagement: str | Path = DEFAULT_ENGAGEMENT) -> None:
+    def __init__(self, *, engagement: str | Path | None = None) -> None:
         super().__init__()
-        self.engagement_path = str(engagement)
+        # None => start blank: no scope, no resumed history. The operator configures a new
+        # engagement by describing the target; the model drafts it and the operator approves.
+        self.engagement_path = str(engagement) if engagement else None
         self.mode = self._load_mode()
         self.engine: Engine | None = None
         self.loop = None
@@ -168,6 +170,10 @@ class HexTUI(App):
     def _announce_saved_session(self) -> None:
         """At launch, tell the operator if a saved session will resume (it loads lazily
         on the first prompt, so without this notice it isn't visible up front)."""
+        if self.engagement_path is None:  # blank launch: nothing to resume
+            self._log("no engagement — describe your target to configure one "
+                      "(the model drafts it, you approve the scope/ROE).", _MUTED)
+            return
         try:
             from hexharness import session as sess
             from hexharness.engagement import Engagement
@@ -262,7 +268,10 @@ class HexTUI(App):
         return e.key, (self._selection.get("model") or model_for(e))
 
     def _sync_header(self) -> None:
-        eng = self.engine.engagement.name if self.engine else Path(self.engagement_path).stem
+        if self.engine:
+            eng = self.engine.engagement.name
+        else:
+            eng = Path(self.engagement_path).stem if self.engagement_path else "unconfigured"
         provider, model = self._provider_model()
         parts = [
             "HexHarness",
@@ -314,6 +323,14 @@ class HexTUI(App):
     def _ensure_engine(self) -> None:
         # Idempotent: build the engine if missing, and (re)build the loop if missing,
         # carrying any saved conversation across a provider change.
+        if self.engine is None and self.engagement_path is None:
+            # Blank launch: unconfigured engine (empty scope, full registry). The model can
+            # only draft; _propose_scope rebuilds a file-backed engine once a draft is approved.
+            self._eng_name = ""  # not persisted until configured
+            self.engine = Engine.blank(
+                approver=TUIApprover(self), secret_requester=TUISecretRequester(self),
+            )
+            self.engine.events._bus.subscribe(self._on_event)
         if self.engine is None:
             from hexharness import session as sess
             from hexharness.engagement import Engagement
@@ -457,6 +474,19 @@ class HexTUI(App):
         approved = await self.push_screen_wait(ScopeApprovalModal(eng))
         if not approved:
             self._log("scope change rejected", _MUTED)
+            return
+        if self.engagement_path is None:
+            # Configuring from a blank launch: rebuild a file-backed engine under the new
+            # engagement (so its audit log + conversation persist under its own slug),
+            # carrying the drafting conversation forward.
+            if self.loop is not None:
+                self._saved_conversation = self.loop.conversation
+                self._saved_tokens = self.loop.last_input_tokens
+            self.engagement_path = path
+            self.engine = None
+            self.loop = None
+            self._ensure_engine()
+            self._log(f"engagement configured: {eng.name} — scope is now active", _SUCCESS)
             return
         await self.engine.apply_engagement(eng, approved_by="operator")
         if self.loop is not None:

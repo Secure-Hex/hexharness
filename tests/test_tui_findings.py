@@ -47,7 +47,10 @@ async def test_ctrl_f_without_engine_shows_empty_state(monkeypatch):
         raise RuntimeError("no API key configured")
 
     monkeypatch.setattr(HexTUI, "_make_provider", _no_key)
-    app = HexTUI()
+    # A real engagement path hits the provider-dependent branch; with the key missing the
+    # engine can't build, so the screen falls back to its empty-state note. (A blank launch,
+    # by contrast, always has an unconfigured engine and would show an empty findings list.)
+    app = HexTUI(engagement="tests/data/sample.engagement.yaml")
     async with app.run_test() as pilot:
         await pilot.press("ctrl+f")
         await pilot.pause()

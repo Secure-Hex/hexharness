@@ -112,7 +112,9 @@ def _parser() -> argparse.ArgumentParser:
     _common(i)
 
     t = sub.add_parser("tui", help="launch the terminal UI")
-    t.add_argument("--engagement", default="engagements/example.engagement.yaml")
+    # No default: launched without --engagement, the TUI starts blank (no scope, no resumed
+    # history) and the operator configures a new engagement by describing the target.
+    t.add_argument("--engagement", default=None)
 
     sub.add_parser("build-image", help="build the HexHarness sandbox image (Kali + tools)")
     return p

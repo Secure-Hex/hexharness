@@ -151,6 +151,26 @@ class Engine:
         )
 
     @classmethod
+    def blank(cls, *, approver: Approver | None = None, secret_requester=None,
+              db: str = ":memory:", vault=None) -> "Engine":
+        """An UNCONFIGURED engine: empty scope, report-only ceiling, but the FULL tool
+        registry (incl. the events-wired engagement_draft tool). The model can only draft
+        an engagement — everything else is denied fail-closed by scope/ROE. Used by the TUI
+        when launched without --engagement; once the operator approves a draft, the caller
+        rebuilds a file-backed engine from the drafted file."""
+        from hexharness.control.policy import Autonomy, Phase
+
+        eng = Engagement.model_validate({
+            "name": "unconfigured", "client": "",
+            "scope": {}, "roe": {"max_risk": "passive", "max_autonomy": "report", "max_phase": "recon"},
+        })
+        return cls._assemble(
+            eng, provider=None, requested_mode=Mode(autonomy=Autonomy.REPORT, phase=Phase.RECON),
+            approver=approver, subagent="main", db=db, registry=None,
+            kill_trigger_file=None, vault=vault, secret_requester=secret_requester,
+        )
+
+    @classmethod
     def _assemble(
         cls, eng: Engagement, *, provider: LLMProvider | None, requested_mode: Mode | None,
         approver: Approver | None, subagent: str, db: str, registry: ToolRegistry | None,
