@@ -53,16 +53,21 @@ class SkillRegistry:
     def __init__(self) -> None:
         self._skills: dict[str, Skill] = {}
 
-    def discover(self, root: Path) -> SkillRegistry:
-        """Scan immediate subdirectories of `root` for a `skill.yaml`. Returns self
-        so callers can chain `SkillRegistry().discover(path)`."""
-        for child in sorted(Path(root).iterdir()):
+    def discover(self, root: Path, *, replace: bool = False) -> SkillRegistry:
+        """Scan immediate subdirectories of `root` for a `skill.yaml`. Returns self so
+        callers can chain layered discovery (packaged -> global -> project). A missing root
+        is skipped. With replace=True a later layer overrides an earlier skill of the same
+        name (project > global > packaged); otherwise a duplicate raises."""
+        root = Path(root)
+        if not root.is_dir():
+            return self
+        for child in sorted(root.iterdir()):
             manifest_path = child / MANIFEST_FILE
             if not manifest_path.is_file():
                 continue
             data = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
             manifest = SkillManifest.model_validate(data)
-            if manifest.name in self._skills:
+            if manifest.name in self._skills and not replace:
                 raise ValueError(f"duplicate skill name: {manifest.name}")
             self._skills[manifest.name] = Skill(manifest, child / PLAYBOOK_FILE)
         return self

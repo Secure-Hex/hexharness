@@ -50,8 +50,13 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     vault = vault or Vault()
     secret_requester = secret_requester or DenySecretRequester()
     workspace = Path(workspace or ".hexharness/workspace")
-    library = Path(__file__).parent / "skills" / "library"
-    skills = SkillRegistry().discover(library)
+    library = Path(__file__).parent / "skills" / "library"      # packaged (read-only)
+    global_skills = Path.home() / ".hexharness" / "skills"       # every engagement
+    project_skills = workspace.parent / "skills"                 # this engagement only
+    # Layered: project overrides global overrides packaged.
+    skills = (SkillRegistry().discover(library)
+              .discover(global_skills, replace=True)
+              .discover(project_skills, replace=True))
 
     # passive, no scope needed
     reg.register(CweLookupTool())
@@ -74,7 +79,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     # command execution, sandboxed (DESTRUCTIVE + approval)
     reg.register(ExecCommandTool(executor, image=sandbox_image, workspace=str(workspace)))
     # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
-    reg.register(SkillInstallTool(skills, library))
+    reg.register(SkillInstallTool(skills, library, global_dir=global_skills, project_dir=project_skills))
     reg.register(McpConnectTool(reg, vault, secret_requester))
     # API testing via Postman collections (list passive; run intrusive + scope-checked)
     reg.register(PostmanListTool())

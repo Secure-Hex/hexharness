@@ -43,6 +43,12 @@ from hexharness.tools.registry import ToolRegistry
 class SkillInstallInput(BaseModel):
     """Two modes: author a new skill inline, OR register an existing on-disk dir."""
 
+    # Where to install. REQUIRED so you must ASK the operator first: "project" = only this
+    # engagement; "global" = ~/.hexharness/skills, available to every future engagement.
+    scope: str = Field(
+        description="Install scope: 'project' (this engagement only) or 'global' (all "
+        "engagements). ASK THE OPERATOR which they want before installing."
+    )
     # Inline authoring mode.
     name: str | None = Field(default=None, description="New skill's unique name.")
     description: str | None = Field(default=None, description="One-line summary.")
@@ -55,6 +61,8 @@ class SkillInstallInput(BaseModel):
 
     @model_validator(mode="after")
     def _one_mode(self) -> SkillInstallInput:
+        if self.scope not in ("project", "global"):
+            raise ValueError("scope must be 'project' or 'global'")
         if self.source_path:
             return self
         missing = [f for f in ("name", "description", "phase", "playbook_markdown") if not getattr(self, f)]
@@ -83,18 +91,26 @@ def _install_skill_dir(registry: SkillRegistry, skill_dir: Path) -> SkillManifes
 class SkillInstallTool(Tool):
     name = "skill_install"
     description = (
-        "Install a new skill into the live library so it becomes browsable/loadable via "
-        "skill_lookup. Either author one inline (name, description, phase, playbook_markdown) "
-        "or register an existing on-disk skill directory (source_path)."
+        "Install a new skill so it becomes browsable/loadable via skill_lookup. Either author "
+        "one inline (name, description, phase, playbook_markdown) or register an existing on-disk "
+        "skill directory (source_path). ALWAYS ask the operator whether to install for this "
+        "project only or globally, then pass scope='project' or scope='global'."
     )
     input_model = SkillInstallInput
     risk_level = RiskLevel.ACTIVE
     scope_sensitive = False
     requires_approval = True
 
-    def __init__(self, skill_registry: SkillRegistry, library_dir: Path) -> None:
+    def __init__(self, skill_registry: SkillRegistry, library_dir: Path, *,
+                 global_dir: Path | None = None, project_dir: Path | None = None) -> None:
         self._registry = skill_registry
-        self._library_dir = Path(library_dir)
+        self._library_dir = Path(library_dir)  # fallback target when a scope dir is unset
+        self._global_dir = Path(global_dir) if global_dir else None
+        self._project_dir = Path(project_dir) if project_dir else None
+
+    def _target_dir(self, scope: str) -> Path:
+        chosen = self._global_dir if scope == "global" else self._project_dir
+        return chosen or self._library_dir  # fall back (e.g. in tests) when unset
 
     async def run(self, tool_input: dict) -> str:
         data = self.input_model.model_validate(tool_input)
@@ -106,8 +122,8 @@ class SkillInstallTool(Tool):
             manifest = _install_skill_dir(self._registry, skill_dir)
             return f"registered skill '{manifest.name}' ({manifest.phase}) from {skill_dir}"
 
-        # Inline authoring: create library_dir/<name>/ with skill.yaml + playbook.md.
-        skill_dir = self._library_dir / data.name  # type: ignore[arg-type]
+        # Inline authoring: create <scope dir>/<name>/ with skill.yaml + playbook.md.
+        skill_dir = self._target_dir(data.scope) / data.name  # type: ignore[arg-type]
         skill_dir.mkdir(parents=True, exist_ok=True)
         manifest_yaml = yaml.safe_dump(
             {"name": data.name, "description": data.description, "phase": data.phase},
@@ -116,7 +132,7 @@ class SkillInstallTool(Tool):
         (skill_dir / MANIFEST_FILE).write_text(manifest_yaml, encoding="utf-8")
         (skill_dir / PLAYBOOK_FILE).write_text(data.playbook_markdown or "", encoding="utf-8")
         manifest = _install_skill_dir(self._registry, skill_dir)
-        return f"installed skill '{manifest.name}' ({manifest.phase}) at {skill_dir}"
+        return f"installed skill '{manifest.name}' ({manifest.phase}, {data.scope}) at {skill_dir}"
 
 
 # ------------------------------------------------------------------------------ mcp

@@ -19,6 +19,7 @@ async def test_skill_install_inline_then_lookup_loads_body(tmp_path: Path) -> No
     body = "# Subdomain sweep\n\nEnumerate subdomains, then resolve each.\n"
     out = await tool.run(
         {
+            "scope": "project",
             "name": "subdomain_sweep",
             "description": "Enumerate and resolve subdomains.",
             "phase": "recon",
@@ -39,6 +40,21 @@ async def test_skill_install_inline_then_lookup_loads_body(tmp_path: Path) -> No
     assert loaded == body
 
 
+async def test_skill_install_scope_routes_to_right_dir(tmp_path: Path) -> None:
+    registry = SkillRegistry()
+    gdir, pdir = tmp_path / "global", tmp_path / "project"
+    tool = SkillInstallTool(registry, tmp_path / "pkg", global_dir=gdir, project_dir=pdir)
+    base = {"description": "d", "phase": "recon", "playbook_markdown": "body"}
+    await tool.run({**base, "scope": "global", "name": "g_skill"})
+    await tool.run({**base, "scope": "project", "name": "p_skill"})
+    assert (gdir / "g_skill" / "skill.yaml").is_file()
+    assert (pdir / "p_skill" / "skill.yaml").is_file()
+    # a bad scope is rejected before any write
+    import pytest
+    with pytest.raises(Exception):
+        await tool.run({**base, "scope": "system", "name": "x"})
+
+
 async def test_skill_install_registers_existing_dir(tmp_path: Path) -> None:
     src = tmp_path / "canned"
     src.mkdir()
@@ -48,7 +64,7 @@ async def test_skill_install_registers_existing_dir(tmp_path: Path) -> None:
     registry = SkillRegistry()
     # library_dir unused in this mode; point it anywhere.
     tool = SkillInstallTool(registry, tmp_path / "library")
-    out = await tool.run({"source_path": str(src)})
+    out = await tool.run({"scope": "project", "source_path": str(src)})
 
     assert "canned" in out
     assert registry.load("canned") == "canned body"
