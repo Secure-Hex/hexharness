@@ -70,7 +70,10 @@ class HexTUI(App):
         self.mode = Mode(autonomy=Autonomy.INTERACTIVE, phase=Phase.RECON)
         self.engine: Engine | None = None
         self.loop = None
-        self._selection = {"kind": "provider", "keys": ["anthropic"], "model": ""}
+        from hexharness.tui.config import load_selection
+
+        # Reuse the provider chosen in a previous session (keys come from env/vault, not here).
+        self._selection = load_selection() or {"kind": "provider", "keys": ["anthropic"], "model": ""}
         self._tokens = 0
         self._usd = 0.0
         self._live_buf = ""       # accumulating streamed text for the current model turn
@@ -378,10 +381,13 @@ class HexTUI(App):
         if not result:
             return
         self._selection = result
+        from hexharness.tui.config import save_selection
+
+        save_selection(result)  # persist for future sessions (without any api key)
         self.engine = None  # rebuild with the new provider on the next run
         self.loop = None
         self._sync_header()
-        self._log(f"provider set: {self._provider_model()[0]}", _MUTED)
+        self._log(f"provider set: {self._provider_model()[0]}  (saved for next session)", _MUTED)
 
     @work
     async def action_mode(self) -> None:
