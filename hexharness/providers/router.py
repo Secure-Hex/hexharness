@@ -53,6 +53,7 @@ class Router:
         model: str | None = None,
         max_tokens: int = 4096,
         on_text=None,
+        on_thinking=None,
         capability: str = "chat",
     ) -> ModelResponse:
         candidates = self._candidates(capability)
@@ -68,6 +69,7 @@ class Router:
                     model=model or route.models[0],
                     max_tokens=max_tokens,
                     on_text=on_text,
+                    on_thinking=on_thinking,
                 )
             except Exception as exc:  # fall back to the next-cheapest route
                 last_exc = exc

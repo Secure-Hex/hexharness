@@ -125,6 +125,7 @@ class GoogleProvider:
         model: str | None = None,
         max_tokens: int = 4096,
         on_text=None,  # ponytail: accepted for the LLMProvider contract; real streaming is a TODO
+        on_thinking=None,
     ) -> ModelResponse:
         config: dict[str, Any] = {"max_output_tokens": max_tokens}
         if system:

@@ -24,7 +24,7 @@ async def test_approval_applies_scope():
     app = HexTUI()
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()
-        app.engine = Engine.from_engagement("engagements/example.engagement.yaml", provider=None)
+        app.engine = Engine.from_engagement("tests/data/sample.engagement.yaml", provider=None)
 
         async def approve(screen):
             return True
@@ -41,7 +41,7 @@ async def test_rejection_keeps_scope():
     app = HexTUI()
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()
-        app.engine = Engine.from_engagement("engagements/example.engagement.yaml", provider=None)
+        app.engine = Engine.from_engagement("tests/data/sample.engagement.yaml", provider=None)
 
         async def reject(screen):
             return False

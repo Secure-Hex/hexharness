@@ -10,7 +10,7 @@ from hexharness.engine import Engine
 from hexharness.events.store import EventStore
 from hexharness.tools.native.engagement_tools import EngagementDraftTool
 
-ENG = Path(__file__).resolve().parent.parent / "engagements" / "example.engagement.yaml"
+ENG = Path(__file__).resolve().parent.parent / "tests" / "data" / "sample.engagement.yaml"
 
 
 async def test_draft_tool_emits_proposed(tmp_path):

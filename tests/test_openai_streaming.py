@@ -64,3 +64,52 @@ async def test_accumulates_streamed_tool_call():
     tus = resp.tool_uses()
     assert len(tus) == 1
     assert tus[0].name == "dns_lookup" and tus[0].input == {"host": "acme.example"}
+
+
+class _FakeRespChoice:
+    def __init__(self):
+        self.message = SimpleNamespace(content="blocking result", tool_calls=None)
+        self.finish_reason = "stop"
+
+
+class _FallbackClient:
+    """Stream raises mid-iteration; a plain create() then succeeds (the fallback)."""
+    def __init__(self):
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+        self.calls = 0
+
+    async def _create(self, **kwargs):
+        self.calls += 1
+        if kwargs.get("stream"):
+            async def gen():
+                raise RuntimeError("The stream ended before completion")
+                yield  # pragma: no cover
+            return gen()
+        return SimpleNamespace(choices=[_FallbackChoice()], model="m",
+                               usage=SimpleNamespace(prompt_tokens=5, completion_tokens=2))
+
+
+class _FallbackChoice:
+    def __init__(self):
+        self.message = SimpleNamespace(content="blocking result", tool_calls=None)
+        self.finish_reason = "stop"
+
+
+async def test_falls_back_to_blocking_when_stream_breaks():
+    client = _FallbackClient()
+    resp = await stream_openai(client, {"model": "m"}, lambda s: None)
+    assert resp.text() == "blocking result"
+    assert client.calls == 2  # stream attempt + blocking fallback
+
+
+async def test_reasoning_deltas_go_to_on_thinking():
+    chunks = [
+        SimpleNamespace(choices=[SimpleNamespace(
+            delta=SimpleNamespace(content=None, tool_calls=None, reasoning_content="let me think"),
+            finish_reason=None)], model="m", usage=None),
+        _delta(content="answer"),
+        _delta(finish="stop"),
+    ]
+    thoughts, text = [], []
+    resp = await stream_openai(_FakeClient(chunks), {"model": "m"}, text.append, thoughts.append)
+    assert thoughts == ["let me think"] and resp.text() == "answer"

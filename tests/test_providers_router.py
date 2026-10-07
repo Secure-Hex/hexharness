@@ -13,7 +13,7 @@ class _Fake:
         self.boom = boom
         self.calls = 0
 
-    async def complete(self, messages, *, tools=None, system=None, model=None, max_tokens=4096, on_text=None):
+    async def complete(self, messages, *, tools=None, system=None, model=None, max_tokens=4096, on_text=None, on_thinking=None):
         self.calls += 1
         if self.boom:
             raise RuntimeError(f"{self.name} down")

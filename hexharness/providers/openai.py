@@ -104,47 +104,61 @@ def from_openai_response(resp) -> ModelResponse:
     )
 
 
-async def stream_openai(client, kwargs: dict[str, Any], on_text) -> ModelResponse:
-    """Stream a Chat Completions call, pushing text deltas to on_text as they arrive,
-    and accumulate the full response (text + tool calls + usage) into a ModelResponse.
-    Shared by every OpenAI-compatible provider (OpenAI, Ollama, the gateways)."""
-    kwargs = {**kwargs, "stream": True, "stream_options": {"include_usage": True}}
+async def stream_openai(client, kwargs: dict[str, Any], on_text, on_thinking=None) -> ModelResponse:
+    """Stream a Chat Completions call, pushing text deltas to on_text (and reasoning
+    deltas to on_thinking) as they arrive, and accumulate the full response into a
+    ModelResponse. Shared by every OpenAI-compatible provider.
+
+    Robust to flaky gateways: if streaming fails partway (e.g. a gateway that doesn't
+    support stream/stream_options and ends the stream early), fall back to one blocking
+    completion so the turn still succeeds."""
+    stream_kwargs = {**kwargs, "stream": True, "stream_options": {"include_usage": True}}
     text_parts: list[str] = []
     tool_slots: dict[int, dict[str, str]] = {}  # index -> {id, name, args}
     finish_reason: str | None = None
     usage = None
     model = ""
 
-    stream = await client.chat.completions.create(**kwargs)
-    async for chunk in stream:
-        if getattr(chunk, "model", ""):
-            model = chunk.model
-        if getattr(chunk, "usage", None):
-            usage = chunk.usage
-        for choice in chunk.choices or []:
-            delta = choice.delta
-            if getattr(delta, "content", None):
-                text_parts.append(delta.content)
-                on_text(delta.content)
-            for tc in getattr(delta, "tool_calls", None) or []:
-                slot = tool_slots.setdefault(tc.index, {"id": "", "name": "", "args": ""})
-                if tc.id:
-                    slot["id"] = tc.id
-                fn = getattr(tc, "function", None)
-                if fn and getattr(fn, "name", None):
-                    slot["name"] = fn.name
-                if fn and getattr(fn, "arguments", None):
-                    slot["args"] += fn.arguments
-            if choice.finish_reason:
-                finish_reason = choice.finish_reason
+    try:
+        stream = await client.chat.completions.create(**stream_kwargs)
+        async for chunk in stream:
+            if getattr(chunk, "model", ""):
+                model = chunk.model
+            if getattr(chunk, "usage", None):
+                usage = chunk.usage
+            for choice in chunk.choices or []:
+                delta = choice.delta
+                reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+                if reasoning and on_thinking is not None:
+                    on_thinking(reasoning)
+                if getattr(delta, "content", None):
+                    text_parts.append(delta.content)
+                    on_text(delta.content)
+                for tc in getattr(delta, "tool_calls", None) or []:
+                    slot = tool_slots.setdefault(tc.index, {"id": "", "name": "", "args": ""})
+                    if tc.id:
+                        slot["id"] = tc.id
+                    fn = getattr(tc, "function", None)
+                    if fn and getattr(fn, "name", None):
+                        slot["name"] = fn.name
+                    if fn and getattr(fn, "arguments", None):
+                        slot["args"] += fn.arguments
+                if choice.finish_reason:
+                    finish_reason = choice.finish_reason
+    except Exception:  # noqa: BLE001 — gateway ended the stream early: fall back to blocking
+        # ponytail: partial text may already be on screen; the blocking result is canonical.
+        resp = await client.chat.completions.create(**kwargs)
+        return from_openai_response(resp)
 
     content: list = []
     if "".join(text_parts):
         content.append(TextBlock(text="".join(text_parts)))
     for slot in tool_slots.values():
-        content.append(ToolUseBlock(
-            id=slot["id"], name=slot["name"], input=json.loads(slot["args"] or "{}")
-        ))
+        try:
+            args = json.loads(slot["args"] or "{}")
+        except json.JSONDecodeError:
+            args = {}
+        content.append(ToolUseBlock(id=slot["id"], name=slot["name"], input=args))
     return ModelResponse(
         content=content,
         stop_reason=_STOP_MAP.get(finish_reason, StopReason.OTHER),
@@ -177,7 +191,8 @@ class OpenAIProvider:
         system: str | None = None,
         model: str | None = None,
         max_tokens: int = 4096,
-        on_text=None,  # ponytail: accepted for the LLMProvider contract; real streaming is a TODO
+        on_text=None,
+        on_thinking=None,
     ) -> ModelResponse:
         kwargs: dict[str, Any] = {
             "model": model or self.default_model,
@@ -186,7 +201,7 @@ class OpenAIProvider:
         }
         if tools:
             kwargs["tools"] = tools_to_openai(tools)
-        if on_text is not None:
-            return await stream_openai(self._client, kwargs, on_text)
+        if on_text is not None or on_thinking is not None:
+            return await stream_openai(self._client, kwargs, on_text or (lambda s: None), on_thinking)
         resp = await self._client.chat.completions.create(**kwargs)
         return from_openai_response(resp)

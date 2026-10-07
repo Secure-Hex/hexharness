@@ -192,9 +192,10 @@ class Engine:
             "max_risk": engagement.roe.max_risk,
         })
 
-    def loop(self, *, provider: LLMProvider, model: str | None = None, on_text=None) -> AgentLoop:
+    def loop(self, *, provider: LLMProvider, model: str | None = None,
+             on_text=None, on_thinking=None) -> AgentLoop:
         return AgentLoop(
             provider=provider, control=self.control, registry=self.registry,
             events=self.events, ctx=self.ctx, model=model, kill_switch=self.kill_switch,
-            on_text=on_text,
+            on_text=on_text, on_thinking=on_thinking,
         )

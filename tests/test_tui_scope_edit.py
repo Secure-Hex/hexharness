@@ -17,7 +17,7 @@ from hexharness.events.types import EventType
 from hexharness.tui.app import HexTUI
 from hexharness.tui.screens import ScopeEditScreen
 
-EXAMPLE = "engagements/example.engagement.yaml"
+EXAMPLE = "tests/data/sample.engagement.yaml"
 
 
 def _temp_engagement() -> str:
@@ -97,7 +97,7 @@ async def test_add_entry_no_duplicate_id_crash():
 
     app = _H()
     async with app.run_test(size=(100, 30)) as pilot:
-        app.push_screen(ScopeEditScreen(engagement=Engagement.load("engagements/example.engagement.yaml")))
+        app.push_screen(ScopeEditScreen(engagement=Engagement.load("tests/data/sample.engagement.yaml")))
         for _ in range(4):
             await pilot.pause()
         scr = app.screen

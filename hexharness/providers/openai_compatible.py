@@ -48,6 +48,7 @@ class OpenAICompatibleProvider:
         model: str | None = None,
         max_tokens: int = 4096,
         on_text=None,
+        on_thinking=None,
     ) -> ModelResponse:
         kwargs: dict[str, Any] = {
             "model": model or self.default_model,
@@ -56,7 +57,7 @@ class OpenAICompatibleProvider:
         }
         if tools:
             kwargs["tools"] = tools_to_openai(tools)
-        if on_text is not None:
-            return await stream_openai(self._client, kwargs, on_text)
+        if on_text is not None or on_thinking is not None:
+            return await stream_openai(self._client, kwargs, on_text or (lambda s: None), on_thinking)
         resp = await self._client.chat.completions.create(**kwargs)
         return from_openai_response(resp)

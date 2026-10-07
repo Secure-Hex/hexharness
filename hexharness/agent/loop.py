@@ -42,6 +42,7 @@ class AgentLoop:
         max_iterations: int = 12,
         kill_switch=None,
         on_text=None,
+        on_thinking=None,
         compact_threshold: float = 0.8,
     ):
         self.provider = provider
@@ -54,6 +55,7 @@ class AgentLoop:
         self.max_iterations = max_iterations
         self.kill_switch = kill_switch
         self.on_text = on_text
+        self.on_thinking = on_thinking
         self.compact_threshold = compact_threshold
         # Persistent conversation across run() calls, so the model remembers prior turns
         # and compaction has something to compact.
@@ -111,7 +113,7 @@ class AgentLoop:
 
             resp = await self.provider.complete(
                 messages, tools=self.registry.specs(), system=self.system, model=self.model,
-                on_text=self.on_text,
+                on_text=self.on_text, on_thinking=self.on_thinking,
             )
             self.last_input_tokens = resp.usage.input_tokens
             self.control.budget.add_tokens(resp.usage.total_tokens)

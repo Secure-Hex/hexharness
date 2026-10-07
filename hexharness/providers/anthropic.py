@@ -91,6 +91,7 @@ class AnthropicProvider:
         model: str | None = None,
         max_tokens: int = 4096,
         on_text=None,
+        on_thinking=None,
     ) -> ModelResponse:
         kwargs: dict[str, Any] = {
             "model": model or self.default_model,

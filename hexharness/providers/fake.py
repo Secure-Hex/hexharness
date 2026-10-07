@@ -26,6 +26,7 @@ class FakeProvider:
         model: str | None = None,
         max_tokens: int = 4096,
         on_text=None,
+        on_thinking=None,
     ) -> ModelResponse:
         self.calls.append(list(messages))
         if not self._scripted:

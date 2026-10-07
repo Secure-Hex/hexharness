@@ -7,7 +7,7 @@ from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.engagement import Engagement
 from hexharness.tools.base import RiskLevel
 
-ENG = Path(__file__).resolve().parent.parent / "engagements" / "example.engagement.yaml"
+ENG = Path(__file__).resolve().parent.parent / "tests" / "data" / "sample.engagement.yaml"
 
 
 def test_loads_and_builds_control_objects():

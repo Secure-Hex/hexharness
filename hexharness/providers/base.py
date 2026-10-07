@@ -24,4 +24,5 @@ class LLMProvider(Protocol):
         model: str | None = None,
         max_tokens: int = 4096,
         on_text: TextSink | None = None,
+        on_thinking: TextSink | None = None,
     ) -> ModelResponse: ...
