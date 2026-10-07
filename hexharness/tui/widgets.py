@@ -15,7 +15,8 @@ from textual.widgets import TextArea
 class PromptArea(TextArea):
     MIN_ROWS = 1
     MAX_ROWS = 12  # beyond this the box scrolls internally instead of growing further
-    completer = None  # app sets this: callable(prefix) -> top match | None (for Tab-complete)
+    completer = None  # app sets this: callable() -> selected match | None (Tab-complete)
+    nav_fn = None     # app sets this: callable(delta:int) -> None (up/down through matches)
 
     class Submitted(Message):
         def __init__(self, text: str) -> None:
@@ -41,16 +42,21 @@ class PromptArea(TextArea):
         self.styles.height = rows + 2  # + rounded border (top + bottom)
 
     async def _on_key(self, event: events.Key) -> None:
-        if event.key == "tab" and self.completer is not None:
-            text = self.text
-            if text.startswith("/") and " " not in text and "\n" not in text:
-                match = self.completer(text[1:])
-                if match:
-                    event.prevent_default()
-                    event.stop()
-                    self.text = f"/{match} "
-                    self.move_cursor(self.document.end)
-                    return
+        text = self.text
+        slash_active = text.startswith("/") and " " not in text and "\n" not in text
+        if slash_active and self.nav_fn is not None and event.key in ("up", "down"):
+            event.prevent_default()
+            event.stop()
+            self.nav_fn(-1 if event.key == "up" else 1)
+            return
+        if slash_active and event.key == "tab" and self.completer is not None:
+            match = self.completer()
+            if match:
+                event.prevent_default()
+                event.stop()
+                self.text = f"/{match} "
+                self.move_cursor(self.document.end)
+                return
         if event.key == "enter":
             event.prevent_default()
             event.stop()

@@ -71,3 +71,22 @@ async def test_tab_completes_slash_to_top_match():
         await pilot.press("tab")
         await pilot.pause()
         assert box.text == "/sqli-triage "   # completed to the top match + trailing space
+
+
+async def test_updown_selects_then_tab_completes():
+    from hexharness.tui.app import HexTUI
+
+    app = HexTUI()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        box = app.query_one("#prompt", PromptArea)
+        box.focus()
+        box.text = "/s"               # two matches: sqli-triage, subdomain-enumeration
+        await pilot.pause()
+        assert app._slash_sel == 0
+        await pilot.press("down")
+        await pilot.pause()
+        assert app._slash_sel == 1
+        await pilot.press("tab")
+        await pilot.pause()
+        assert box.text == "/subdomain-enumeration "   # the SELECTED match, not the top

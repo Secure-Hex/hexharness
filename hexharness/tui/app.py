@@ -72,6 +72,7 @@ class HexTUI(App):
         self._dictation = None    # lazy push-to-talk dictation (local Whisper)
         self._dict_base = ""      # prompt text present when dictation started
         self._skills = None       # lazy SkillRegistry for /slash skill references
+        self._slash_sel = 0       # selected index in the live slash suggestions
 
     # --- layout ---
 
@@ -87,9 +88,17 @@ class HexTUI(App):
     def on_mount(self) -> None:
         self._sync_header()
         prompt = self.query_one("#prompt", PromptArea)
-        prompt.completer = self._complete_slash  # Tab completes a slash skill to the top match
+        prompt.completer = self._selected_match  # Tab completes the selected match
+        prompt.nav_fn = self._slash_nav          # up/down move the selection
         prompt.focus()
         self._log("HexHarness ready. Ctrl+P to pick a provider, then type a task.", _MUTED)
+
+    def _slash_token(self) -> str | None:
+        """The slash prefix currently being typed, or None if not in slash mode."""
+        text = self.query_one("#prompt", PromptArea).text
+        if text.startswith("/") and " " not in text and "\n" not in text:
+            return text[1:]
+        return None
 
     def _slash_matches(self, prefix: str) -> list[str]:
         names = sorted(n for n in list_skills(self._skill_registry()) if n.lower().startswith(prefix.lower()))
@@ -97,9 +106,33 @@ class HexTUI(App):
             names.append("compact")  # built-in command
         return names
 
-    def _complete_slash(self, prefix: str) -> str | None:
-        matches = self._slash_matches(prefix)
-        return matches[0] if matches else None
+    def _render_suggest(self, items: list[str]) -> None:
+        suggest = self.query_one("#slash-suggest", Static)
+        if not items:
+            suggest.update("(no match)")
+            suggest.display = True
+            return
+        self._slash_sel %= len(items)
+        shown = "  ".join((f"▶ /{n}" if i == self._slash_sel else f"/{n}")
+                           for i, n in enumerate(items))
+        suggest.update(shown + "   ·  ↑/↓ select · Tab complete")
+        suggest.display = True
+
+    def _slash_nav(self, delta: int) -> None:
+        token = self._slash_token()
+        if token is None:
+            return
+        items = self._slash_matches(token)
+        if items:
+            self._slash_sel = (self._slash_sel + delta) % len(items)
+            self._render_suggest(items)
+
+    def _selected_match(self) -> str | None:
+        token = self._slash_token()
+        if token is None:
+            return None
+        items = self._slash_matches(token)
+        return items[self._slash_sel % len(items)] if items else None
 
     # --- header ---
 
@@ -197,15 +230,12 @@ class HexTUI(App):
     @on(PromptArea.Changed, "#prompt")
     def _prompt_changed(self, event: PromptArea.Changed) -> None:
         """Live skill suggestions while typing a slash token (before the first space)."""
-        suggest = self.query_one("#slash-suggest", Static)
-        text = self.query_one("#prompt", PromptArea).text
-        if text.startswith("/") and " " not in text and "\n" not in text:
-            names = self._slash_matches(text[1:])
-            suggest.update(("  ".join(f"/{n}" for n in names) + "   ·  Tab to complete")
-                           if names else "(no match)")
-            suggest.display = True
+        token = self._slash_token()
+        if token is not None:
+            self._slash_sel = 0  # editing the token restarts the selection at the top
+            self._render_suggest(self._slash_matches(token))
         else:
-            suggest.display = False
+            self.query_one("#slash-suggest", Static).display = False
 
     @on(PromptArea.Submitted)
     def _submit(self, event: PromptArea.Submitted) -> None:
