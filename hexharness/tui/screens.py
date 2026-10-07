@@ -443,6 +443,54 @@ class CapabilitiesScreen(ModalScreen[None]):
                     yield Label("  (none)")
 
 
+class FindingDetailScreen(ModalScreen[None]):
+    """Read-only detail of one Finding so the operator can manually verify it (real vs
+    false positive): metadata, full description, the Reproduction / PoC steps, evidence
+    refs, and the curation trail. Scrollable (description/reproduction can be long).
+    Esc closes."""
+
+    BINDINGS = [
+        ("escape", "dismiss", "Close"),
+    ]
+
+    def __init__(self, finding: Any) -> None:
+        super().__init__()
+        self._finding = finding
+
+    def compose(self) -> ComposeResult:
+        f = self._finding
+        with Vertical(id="finding-detail-panel"):
+            yield Static(f.title, id="finding-detail-title")
+            with VerticalScroll(id="finding-detail-body"):
+                yield Static("Overview", classes="cap-section")
+                yield Label(f"  severity:  {f.severity.value}")
+                yield Label(f"  status:    {f.status.value}")
+                yield Label(f"  target:    {f.target or '—'}")
+                yield Label(f"  cwe:       {f.cwe or '—'}")
+                yield Label(f"  created:   {f.created_at}")
+                yield Label(f"  updated:   {f.updated_at}")
+
+                yield Static("Description", classes="cap-section")
+                yield Static(f.description or "(none provided)")
+
+                yield Static("Reproduction / PoC", classes="cap-section")
+                yield Static(f.reproduction or "(none provided)")
+
+                yield Static("Evidence", classes="cap-section")
+                if f.evidence:
+                    for ref in f.evidence:
+                        yield Label(f"  {ref}")
+                else:
+                    yield Label("  (none)", classes="dim")
+
+                if f.curator or f.decision_reason:
+                    yield Static("Curation", classes="cap-section")
+                    if f.curator:
+                        yield Label(f"  curator: {f.curator}")
+                    if f.decision_reason:
+                        yield Label(f"  reason:  {f.decision_reason}")
+
+
 class FindingsScreen(ModalScreen[None]):
     """Findings panel — invariant #5: the agent only ever records CANDIDATEs; a human
     promotes them. Lists findings grouped CANDIDATES / CONFIRMED / REJECTED, and lets the
@@ -456,6 +504,7 @@ class FindingsScreen(ModalScreen[None]):
 
     BINDINGS = [
         ("escape", "dismiss", "Close"),
+        ("d", "detail", "Detail"),
         ("c", "confirm", "Confirm"),
         ("r", "reject", "Reject"),
     ]
@@ -463,7 +512,8 @@ class FindingsScreen(ModalScreen[None]):
     def __init__(self, *, engine: Any) -> None:
         super().__init__()
         self._engine = engine
-        self._active: str | None = None  # highlighted candidate's finding id
+        self._active: str | None = None  # highlighted finding id (any group)
+        self._active_is_candidate = False  # c/r curation only applies to candidates
 
     # --- data (re-queries the store every call, so refresh == rebuild from source) ---
 
@@ -499,13 +549,14 @@ class FindingsScreen(ModalScreen[None]):
                 yield Static("Candidates  (c confirm · r reject)", classes="cap-section")
                 yield ListView(id="cand-list")
                 yield Static("Confirmed", classes="cap-section")
-                yield Vertical(id="confirmed-box")
+                yield ListView(id="conf-list")
                 yield Static("Rejected", classes="cap-section")
-                yield Vertical(id="rejected-box")
+                yield ListView(id="rej-list")
             with Horizontal(id="findings-buttons"):
                 yield Button("Confirm", variant="success", id="confirm-btn")
                 yield Button("Reject", variant="error", id="reject-btn")
                 yield Button("Close", id="close-btn")
+            yield Static("Enter/d: detail · c: confirm · r: reject", id="findings-hint", classes="dim")
 
     async def on_mount(self) -> None:
         if self._engine is not None:
@@ -519,25 +570,53 @@ class FindingsScreen(ModalScreen[None]):
         for f in cands:
             await lst.append(ListItem(Label(self._row(f, hint=True)), id=f"cand-{f.id}"))
         self._active = cands[0].id if cands else None
+        self._active_is_candidate = bool(cands)
         if cands:
             lst.index = 0
-        await self._fill("#confirmed-box", conf)
-        await self._fill("#rejected-box", rej)
+        await self._fill("#conf-list", "conf", conf)
+        await self._fill("#rej-list", "rej", rej)
 
-    async def _fill(self, selector: str, findings: list[Any]) -> None:
-        box = self.query_one(selector, Vertical)
-        await box.remove_children()
+    async def _fill(self, selector: str, prefix: str, findings: list[Any]) -> None:
+        # Confirmed/rejected are selectable too (Enter/d opens detail), but read-only:
+        # curation (c/r) stays gated to candidates in _curate.
+        lst = self.query_one(selector, ListView)
+        await lst.clear()
         if findings:
             for f in findings:
-                await box.mount(Label(self._row(f)))
+                await lst.append(ListItem(Label(self._row(f)), id=f"{prefix}-{f.id}"))
         else:
-            await box.mount(Label("  (none)", classes="dim"))
+            await lst.append(ListItem(Label("  (none)", classes="dim")))
 
     # --- interaction ---
 
-    @on(ListView.Highlighted, "#cand-list")
+    @on(ListView.Highlighted)
     def _highlight(self, event: ListView.Highlighted) -> None:
-        self._active = event.item.id.removeprefix("cand-") if event.item and event.item.id else None
+        item = event.item
+        if item is None or not item.id:  # "(none)" placeholders carry no id
+            self._active = None
+            return
+        prefix, _, fid = item.id.partition("-")
+        self._active = fid
+        self._active_is_candidate = prefix == "cand"
+
+    @on(ListView.Selected)
+    def _selected(self, event: ListView.Selected) -> None:
+        # Enter on a row opens its detail (works for candidate/confirmed/rejected).
+        item = event.item
+        if item is not None and item.id:
+            self.open_detail(item.id.partition("-")[2])
+
+    def action_detail(self) -> None:
+        if self._active:
+            self.open_detail(self._active)
+
+    def open_detail(self, fid: str) -> None:
+        """Fetch the full Finding and push its read-only detail. Drivable in tests."""
+        if self._engine is None:
+            return
+        finding = self._engine.evidence.get(fid)
+        if finding is not None:
+            self.app.push_screen(FindingDetailScreen(finding))
 
     def action_confirm(self) -> None:
         self._curate("confirm")
@@ -560,7 +639,7 @@ class FindingsScreen(ModalScreen[None]):
     @work
     async def _curate(self, action: str) -> None:
         fid = self._active
-        if fid is None:
+        if fid is None or not self._active_is_candidate:  # transitions are from CANDIDATE only
             return
         if action == "confirm":
             await self.confirm_finding(fid)

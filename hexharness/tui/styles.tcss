@@ -296,29 +296,51 @@ FindingsScreen {
     color: $hh-accent;
     padding-bottom: 1;
 }
-#cand-list {
+#cand-list, #conf-list, #rej-list {
     height: auto;
     max-height: 12;
     background: $hh-background;
     border: round $hh-border;
     margin-bottom: 1;
 }
-#cand-list > ListItem {
+#cand-list > ListItem, #conf-list > ListItem, #rej-list > ListItem {
     background: $hh-background;
     color: $hh-text;
     padding: 0 1;
 }
-#cand-list > ListItem.--highlight {
+#cand-list > ListItem.--highlight,
+#conf-list > ListItem.--highlight,
+#rej-list > ListItem.--highlight {
     background: $hh-border;
     color: $hh-accent;
-}
-#confirmed-box, #rejected-box {
-    height: auto;
 }
 #findings-buttons {
     height: auto;
     align-horizontal: left;
     padding-top: 1;
+}
+#findings-hint {
+    padding-top: 1;
+}
+
+/* --- modal: finding detail (read-only verification view) --- */
+FindingDetailScreen {
+    align: center middle;
+}
+#finding-detail-panel {
+    width: 90;
+    max-width: 95%;
+    height: 85%;          /* definite height so the body scrolls when content is long */
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-accent;
+}
+#finding-detail-title {
+    color: $hh-accent;
+    padding-bottom: 1;
+}
+#finding-detail-body {
+    height: 1fr;
 }
 
 Button {

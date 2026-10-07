@@ -7,12 +7,13 @@ import pytest
 
 pytest.importorskip("textual")
 
+from textual.app import App  # noqa: E402
 from textual.widgets import Static  # noqa: E402
 
 from hexharness.evidence.findings import Severity  # noqa: E402
 from hexharness.evidence.store import EvidenceStore  # noqa: E402
 from hexharness.tui.app import HexTUI  # noqa: E402
-from hexharness.tui.screens import FindingsScreen  # noqa: E402
+from hexharness.tui.screens import FindingDetailScreen, FindingsScreen  # noqa: E402
 
 
 async def _store_with_candidates() -> EvidenceStore:
@@ -54,3 +55,43 @@ async def test_ctrl_f_without_engine_shows_empty_state(monkeypatch):
         assert isinstance(app.screen, FindingsScreen)
         text = "\n".join(str(w.render()) for w in app.screen.query(Static))
         assert "no engagement running yet" in text
+
+
+async def test_detail_screen_renders_all_fields():
+    store = EvidenceStore(":memory:")
+    f = await store.add_candidate(
+        title="SQLi in /login",
+        severity=Severity.HIGH,
+        description="Login form concatenates user input straight into the SQL query.",
+        reproduction="curl -X POST https://app.example/login -d \"u=' OR 1=1--\"",
+        cwe="CWE-89",
+        target="app.example",
+        evidence=["ev1", "ev2"],
+    )
+    app = App()
+    async with app.run_test() as pilot:
+        await app.push_screen(FindingDetailScreen(f))
+        await pilot.pause()
+        assert isinstance(app.screen, FindingDetailScreen)
+        text = "\n".join(str(w.render()) for w in app.screen.query(Static))
+
+    assert "SQLi in /login" in text               # title
+    assert "curl -X POST" in text                  # reproduction / PoC
+    assert "CWE-89" in text                        # cwe
+    assert "ev1" in text and "ev2" in text         # each evidence ref
+
+
+async def test_findings_screen_opens_detail_for_highlighted_candidate():
+    store = await _store_with_candidates()
+    fake = SimpleNamespace(evidence=store)
+    screen = FindingsScreen(engine=fake)
+
+    app = App()
+    async with app.run_test() as pilot:
+        await app.push_screen(screen)
+        await pilot.pause()
+        assert screen._active is not None  # first candidate highlighted on mount
+
+        screen.open_detail(screen._active)
+        await pilot.pause()
+        assert isinstance(app.screen, FindingDetailScreen)
