@@ -22,7 +22,13 @@ from hexharness.tui.approver import TUIApprover, TUISecretRequester
 from hexharness.tui.widgets import PromptArea
 from hexharness.tui import providers
 from hexharness.tui.providers import build, entry, model_for, router_spec
-from hexharness.tui.screens import CapabilitiesScreen, FindingsScreen, ModeScreen, ProviderScreen
+from hexharness.tui.screens import (
+    CapabilitiesScreen,
+    FindingsScreen,
+    ModeScreen,
+    ProviderScreen,
+    ScopeApprovalModal,
+)
 
 DEFAULT_ENGAGEMENT = "engagements/example.engagement.yaml"
 
@@ -263,6 +269,27 @@ class HexTUI(App):
             self._log(f"using skill /{used}", _MUTED)
         self._run(prompt)
 
+    @work(group="scope")
+    async def _propose_scope(self, path: str | None) -> None:
+        """Operator approval for a model-proposed scope change. Approval is the ONLY way
+        to apply it — the model cannot activate scope in any mode."""
+        if not path or self.engine is None:
+            return
+        from hexharness.engagement import Engagement
+
+        try:
+            eng = Engagement.load(path)
+        except Exception as exc:  # noqa: BLE001
+            self._log(f"could not load proposed engagement: {exc}", _DANGER)
+            return
+        approved = await self.push_screen_wait(ScopeApprovalModal(eng))
+        if not approved:
+            self._log("scope change rejected", _MUTED)
+            return
+        await self.engine.apply_engagement(eng, approved_by="operator")
+        if self.loop is not None:
+            self.loop.ctx = self.engine.ctx  # live loop adopts the re-clamped context
+
     @work(exclusive=True, group="compact")
     async def _compact(self) -> None:
         if self.loop is None:
@@ -330,6 +357,12 @@ class HexTUI(App):
         elif t is EventType.CONTEXT_COMPACTED:
             self._log(f"context compacted ({p.get('reason')}): "
                       f"{p.get('messages_before')}→{p.get('messages_after')} messages", _WARNING)
+        elif t is EventType.ENGAGEMENT_PROPOSED:
+            self._log(f"scope change proposed: {p.get('name')} — approve in the dialog", _WARNING)
+            self._propose_scope(p.get("path"))
+        elif t is EventType.SCOPE_CHANGED:
+            self._log(f"scope changed (approved by {p.get('approved_by')}): {p.get('engagement')}", _SUCCESS)
+            self._sync_header()
         elif t is EventType.KILL_REQUESTED:
             self._log(f"KILL requested: {p.get('reason', '')}", _DANGER)
         elif t in (EventType.DELEGATION_STARTED, EventType.DELEGATION_FINISHED):

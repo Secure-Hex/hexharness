@@ -328,3 +328,17 @@ Button {
 .dim {
     color: $hh-muted;
 }
+
+/* modal: scope-change approval */
+ScopeApprovalModal { align: center middle; }
+#scope-panel {
+    width: 76;
+    max-width: 90%;
+    height: 80%;
+    padding: 1 2;
+    background: $hh-panel;
+    border: round $hh-warning;
+}
+#scope-title { color: $hh-warning; padding-bottom: 1; }
+#scope-body { height: 1fr; }
+#scope-buttons { height: auto; padding-top: 1; align-horizontal: left; }

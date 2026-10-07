@@ -543,3 +543,48 @@ class FindingsScreen(ModalScreen[None]):
 
     async def reject_finding(self, fid: str) -> None:
         await self._engine.evidence.reject(fid, curator="operator", reason="rejected via TUI")
+
+
+class ScopeApprovalModal(ModalScreen[bool]):
+    """Human gate for a runtime scope/ROE change the model proposed. Dismisses True to
+    apply, False to reject. This modal is the ONLY path to activation, so no mode (not
+    even bypass) can skip it."""
+
+    BINDINGS = [("escape", "dismiss", "Reject"), ("y", "ok", "Approve"), ("n", "dismiss", "Reject")]
+
+    def __init__(self, engagement: Any) -> None:
+        super().__init__()
+        self._eng = engagement
+
+    def compose(self) -> ComposeResult:
+        e = self._eng
+        with Vertical(id="scope-panel"):
+            yield Static("Approve scope change?", id="scope-title")
+            yield Static("The model proposed a new engagement. It activates only if you approve.",
+                         classes="dim")
+            with VerticalScroll(id="scope-body"):
+                yield Label(f"Engagement: {e.name}" + (f"  (client: {e.client})" if e.client else ""))
+                yield Static("Scope", classes="cap-section")
+                for d in e.scope.domains:
+                    yield Label(f"  domain: {d}")
+                for c in e.scope.cidrs:
+                    yield Label(f"  cidr: {c}")
+                for x in e.scope.exclusions:
+                    yield Label(f"  exclude: {x}")
+                yield Static("ROE", classes="cap-section")
+                yield Label(f"  max_risk: {e.roe.max_risk}  ·  max_autonomy: {e.roe.max_autonomy}"
+                            f"  ·  max_phase: {e.roe.max_phase}")
+            with Horizontal(id="scope-buttons"):
+                yield Button("Approve & apply", variant="primary", id="scope-ok")
+                yield Button("Reject", id="scope-no")
+
+    @on(Button.Pressed, "#scope-ok")
+    def _ok(self) -> None:
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#scope-no")
+    def _no(self) -> None:
+        self.dismiss(False)
+
+    def action_ok(self) -> None:
+        self.dismiss(True)
