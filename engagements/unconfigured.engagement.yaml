@@ -1,0 +1,17 @@
+name: unconfigured
+client: ''
+scope:
+  cidrs: []
+  domains: []
+  exclusions: []
+roe:
+  max_risk: destructive
+  max_autonomy: bypass
+  max_phase: bypass
+  windows: []
+budget:
+  max_tokens: null
+  max_usd: null
+  max_seconds: null
+report_template: default.html.j2
+sandbox_image: hexharness/kali:latest

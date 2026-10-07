@@ -56,7 +56,7 @@ class PortScanTool(Tool):
     requires_approval = True
     target_field = "host"
 
-    def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "instrumentisto/nmap"):
+    def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "hexharness/kali:latest"):
         self.executor = executor or SandboxExecutor()
         self.image = image
 
@@ -66,8 +66,9 @@ class PortScanTool(Tool):
         flags = list(tool_input.get("flags") or ["-sS", "-Pn"])  # model-chosen nmap flags
         # argv is a LIST (no shell), so flags can't inject a shell command; the host is
         # still the scope-checked target. NET_RAW lets SYN/OS-detection scans work.
+        # The image has no nmap entrypoint, so the program name must lead the argv.
         result = await self.executor.run(
-            self.image, [*flags, "-p", ports, host],
+            self.image, ["nmap", *flags, "-p", ports, host],
             network="bridge", timeout=300, cap_add=["NET_RAW"],
         )
         return result.stdout if result.ok else f"scan failed (exit {result.exit_code}): {result.stderr}"

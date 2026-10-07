@@ -1,0 +1,18 @@
+name: sandbox-test-scanme
+client: internal-test
+scope:
+  cidrs: []
+  domains:
+  - scanme.nmap.org
+  exclusions: []
+roe:
+  max_risk: destructive
+  max_autonomy: bypass
+  max_phase: bypass
+  windows: []
+budget:
+  max_tokens: null
+  max_usd: null
+  max_seconds: 3600.0
+report_template: default.html.j2
+sandbox_image: hexharness/kali:latest
