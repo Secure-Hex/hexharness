@@ -17,6 +17,7 @@ class RecordFindingInput(BaseModel):
     severity: str = Field(default="medium", description="info | low | medium | high | critical")
     target: str | None = Field(default=None, description="Affected host/URL, if any")
     description: str = ""
+    reproduction: str = Field(default="", description="PoC / step-by-step to reproduce and verify")
     cwe: str | None = Field(default=None, description="e.g. CWE-79")
     evidence: list[str] = Field(default_factory=list, description="refs: event seqs, paths, hashes")
 
@@ -25,8 +26,9 @@ class RecordFindingTool(Tool):
     name = "record_finding"
     description = (
         "Record a security finding as a CANDIDATE in the evidence store. It only reaches "
-        "the report after a human confirms it. Provide title, severity, and ideally target, "
-        "description, and CWE."
+        "the report after a human confirms it. Provide title, severity, target, a clear "
+        "description, a reproduction (PoC / step-by-step so a human can verify it is real), "
+        "evidence refs, and the CWE."
     )
     input_model = RecordFindingInput
     risk_level = RiskLevel.PASSIVE
@@ -44,7 +46,8 @@ class RecordFindingTool(Tool):
             severity = Severity.MEDIUM
         f = await self.evidence.add_candidate(
             title=data.title, severity=severity, target=data.target,
-            description=data.description, evidence=data.evidence, cwe=data.cwe,
+            description=data.description, reproduction=data.reproduction,
+            evidence=data.evidence, cwe=data.cwe,
         )
         return (f"Recorded CANDIDATE finding {f.id}: {f.title} [{severity.value}]. "
                 "Awaiting human curation before it can reach the report.")

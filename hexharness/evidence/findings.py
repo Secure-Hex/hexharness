@@ -33,6 +33,7 @@ class Finding(BaseModel):
     status: FindingStatus = FindingStatus.CANDIDATE
     target: str | None = None
     description: str = ""
+    reproduction: str = ""  # PoC / step-by-step to reproduce and verify (real vs false positive)
     evidence: list[str] = Field(default_factory=list)  # refs: event seqs, file paths, output hashes
     cwe: str | None = None
     # Curation trail (human-in-the-loop). Set on confirm/reject.

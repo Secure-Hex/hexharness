@@ -42,10 +42,11 @@ class EvidenceStore:
     async def add_candidate(
         self, *, title: str, severity: Severity, target: str | None = None,
         description: str = "", evidence: list[str] | None = None, cwe: str | None = None,
+        reproduction: str = "",
     ) -> Finding:
         f = Finding(
             id=uuid.uuid4().hex, title=title, severity=severity, target=target,
-            description=description, evidence=evidence or [], cwe=cwe,
+            description=description, reproduction=reproduction, evidence=evidence or [], cwe=cwe,
         )
         self._save(f)
         if self._events:
