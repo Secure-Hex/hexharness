@@ -35,7 +35,12 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     from hexharness.tools.native.exec import ExecCommandTool
     from hexharness.tools.native.extend import McpConnectTool, SkillInstallTool
     from hexharness.tools.native.fs import FileReadTool, FileWriteTool
+    from hexharness.tools.native.binary import BinaryInfoTool, ChecksecTool, DisassembleTool
     from hexharness.tools.native.postman import PostmanListTool, PostmanRunTool
+    from hexharness.tools.native.recon import DnsEnumTool, SmbEnumTool, WhoisLookupTool
+    from hexharness.tools.native.services import (
+        BannerGrabTool, FtpCheckTool, HttpProbeTool, SshInfoTool,
+    )
     from hexharness.tools.native.websearch import WebSearchTool
 
     reg = ToolRegistry()
@@ -75,6 +80,19 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     # scope-sensitive / sandboxed network
     reg.register(DnsLookupTool())
     reg.register(PortScanTool(executor))
+    # network service probes (ACTIVE, scope-sensitive — Scope Guard checks the host/url)
+    reg.register(BannerGrabTool())
+    reg.register(FtpCheckTool())
+    reg.register(SshInfoTool())
+    reg.register(HttpProbeTool())
+    # recon via kali sandbox (scope-sensitive)
+    reg.register(DnsEnumTool(executor, image=sandbox_image))
+    reg.register(SmbEnumTool(executor, image=sandbox_image))
+    reg.register(WhoisLookupTool(executor, image=sandbox_image))
+    # binary / reversing static analysis, workspace-confined (ACTIVE, host subprocess)
+    reg.register(BinaryInfoTool(workspace))
+    reg.register(ChecksecTool(workspace))
+    reg.register(DisassembleTool(workspace))
     return reg
 
 
