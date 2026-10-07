@@ -174,10 +174,35 @@ class HexTUI(App):
 
             name = Engagement.load(self.engagement_path).name
             if sess.exists(name):
-                self._log(f"↩ saved session for '{name}' found — it resumes on your first prompt "
-                          "(conversation, findings and history).", _SUCCESS)
+                convo = sess.load_conversation(name)
+                if convo:
+                    self._log(f"↩ resuming '{name}' — {len(convo)} messages of history:", _SUCCESS)
+                    self._render_history(convo)
+                    self._log("— end of history, continue below —", _MUTED)
+                else:
+                    self._log(f"↩ saved session for '{name}' found (findings + event log resume "
+                              "on your first prompt).", _SUCCESS)
         except Exception:  # noqa: BLE001 — a missing/bad engagement file is not fatal here
             pass
+
+    def _render_history(self, messages) -> None:
+        """Re-paint a resumed conversation into the transcript so the operator sees the
+        past turns (the model already gets them as context; this is for visibility)."""
+        from hexharness.providers.types import TextBlock, ToolResultBlock, ToolUseBlock
+
+        for m in messages:
+            is_user = getattr(m.role, "value", "") == "user"
+            for b in m.content:
+                if isinstance(b, TextBlock) and b.text.strip():
+                    if is_user:
+                        self._log(f"❯ {b.text}", _ACCENT)
+                    else:
+                        self._log_markdown(b.text)
+                elif isinstance(b, ToolUseBlock):
+                    self._log(f"→ {b.name} {b.input}", _MUTED)
+                elif isinstance(b, ToolResultBlock):
+                    mark = "✗" if b.is_error else "✓"
+                    self._log(f"{mark} {b.content[:200]}", _MUTED)
 
     def _slash_token(self) -> str | None:
         """The slash prefix currently being typed, or None if not in slash mode."""
