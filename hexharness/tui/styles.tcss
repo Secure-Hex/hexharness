@@ -165,12 +165,12 @@ ModeScreen {
 #mode-panel {
     width: 70;
     max-width: 90%;
-    height: auto;
-    max-height: 90%;
+    height: 90%;
     padding: 1 2;
     background: $hh-panel;
     border: round $hh-accent;
 }
+#mode-body { height: 1fr; }
 #mode-title {
     color: $hh-accent;
     padding-bottom: 1;

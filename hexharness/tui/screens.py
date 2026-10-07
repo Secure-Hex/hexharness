@@ -209,47 +209,63 @@ class CustomProviderModal(ModalScreen[dict]):
         self.dismiss(None)
 
 
-class ModeScreen(ModalScreen[Mode]):
+# ROE ceiling choices, shared by the Mode screen (Ctrl+O) and the scope editor (Ctrl+E).
+ROE_CHOICES = {
+    "max_risk": ("passive", "active", "intrusive", "destructive"),
+    "max_autonomy": ("plan", "report", "interactive", "auto", "bypass"),
+    "max_phase": ("recon", "enumeration", "exploitation", "post_exploitation", "reporting", "bypass"),
+}
+
+
+class ModeScreen(ModalScreen[dict]):
     """Pick Autonomy + Phase from menus. A reliable alternative to the f2/f3 cycles that
     terminals/multiplexers often swallow. Enter / Set mode returns the chosen Mode; Esc
     cancels. Current values are preselected."""
 
     BINDINGS = [("escape", "dismiss", "Close")]
 
-    def __init__(self, *, mode: Mode) -> None:
+    def __init__(self, *, mode: Mode, roe: dict | None = None) -> None:
         super().__init__()
         self._mode = mode
+        self._roe = roe or {"max_risk": "active", "max_autonomy": "interactive", "max_phase": "enumeration"}
 
     def compose(self) -> ComposeResult:
         with Vertical(id="mode-panel"):
-            yield Static("Mode  ·  autonomy + phase", id="mode-title")
-            with Horizontal(id="mode-lists"):
-                with Vertical(classes="mode-col"):
-                    yield Static("Autonomy", classes="cap-section")
-                    yield ListView(
-                        *[ListItem(Label(a.name.lower()), id=f"aut-{a.name}") for a in Autonomy],
-                        id="mode-autonomy",
-                    )
-                with Vertical(classes="mode-col"):
-                    yield Static("Phase", classes="cap-section")
-                    yield ListView(
-                        *[ListItem(Label(p.name.lower()), id=f"pha-{p.name}") for p in Phase],
-                        id="mode-phase",
-                    )
+            yield Static("Mode  ·  autonomy + phase  ·  ROE ceiling", id="mode-title")
+            with VerticalScroll(id="mode-body"):
+                with Horizontal(id="mode-lists"):
+                    with Vertical(classes="mode-col"):
+                        yield Static("Autonomy", classes="cap-section")
+                        yield ListView(
+                            *[ListItem(Label(a.name.lower()), id=f"aut-{a.name}") for a in Autonomy],
+                            id="mode-autonomy",
+                        )
+                    with Vertical(classes="mode-col"):
+                        yield Static("Phase", classes="cap-section")
+                        yield ListView(
+                            *[ListItem(Label(p.name.lower()), id=f"pha-{p.name}") for p in Phase],
+                            id="mode-phase",
+                        )
+                yield Static("ROE ceiling (the hard cap — the mode above is clamped to this)",
+                             classes="cap-section")
+                for field, choices in ROE_CHOICES.items():
+                    yield Label(f"  {field}")
+                    yield Select([(c, c) for c in choices], value=self._roe[field],
+                                 allow_blank=False, id=f"mode-roe-{field.replace('_', '-')}")
             with Horizontal(id="mode-buttons"):
-                yield Button("Set mode", variant="primary", id="mode-submit-btn")
+                yield Button("Apply", variant="primary", id="mode-submit-btn")
                 yield Button("Cancel", id="mode-cancel-btn")
 
     def on_mount(self) -> None:
         self.query_one("#mode-autonomy", ListView).index = list(Autonomy).index(self._mode.autonomy)
         self.query_one("#mode-phase", ListView).index = list(Phase).index(self._mode.phase)
 
-    @on(ListView.Selected)
     @on(Button.Pressed, "#mode-submit-btn")
     def action_submit(self) -> None:
         a = list(Autonomy)[self.query_one("#mode-autonomy", ListView).index or 0]
         p = list(Phase)[self.query_one("#mode-phase", ListView).index or 0]
-        self.dismiss(Mode(autonomy=a, phase=p))
+        roe = {f: self.query_one(f"#mode-roe-{f.replace('_', '-')}", Select).value for f in ROE_CHOICES}
+        self.dismiss({"mode": Mode(autonomy=a, phase=p), "roe": roe})
 
     @on(Button.Pressed, "#mode-cancel-btn")
     def action_cancel(self) -> None:
@@ -637,11 +653,7 @@ class ScopeEditScreen(ModalScreen[dict]):
             "max_phase": engagement.roe.max_phase,
         }
 
-    _ROE_CHOICES = {
-        "max_risk": ("passive", "active", "intrusive", "destructive"),
-        "max_autonomy": ("plan", "report", "interactive", "auto", "bypass"),
-        "max_phase": ("recon", "enumeration", "exploitation", "post_exploitation", "reporting", "bypass"),
-    }
+    _ROE_CHOICES = ROE_CHOICES  # shared with the Mode screen
 
     def compose(self) -> ComposeResult:
         with Vertical(id="scope-edit-panel"):

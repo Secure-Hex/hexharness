@@ -462,13 +462,41 @@ class HexTUI(App):
         self._sync_header()
         self._log(f"provider set: {self._provider_model()[0]}  (saved for next session)", _MUTED)
 
+    def _current_roe(self) -> dict:
+        from hexharness.engagement import Engagement
+
+        eng = self.engine.engagement if self.engine is not None else Engagement.load(self.engagement_path)
+        return {"max_risk": eng.roe.max_risk, "max_autonomy": eng.roe.max_autonomy,
+                "max_phase": eng.roe.max_phase}
+
+    async def _apply_roe(self, roe_update: dict) -> None:
+        """Persist + apply a ROE ceiling change (deliberate human action, audited)."""
+        from hexharness.engagement import Engagement
+        from hexharness.engagement_builder import EngagementSpec, render_yaml
+
+        base = self.engine.engagement if self.engine is not None else Engagement.load(self.engagement_path)
+        if all(getattr(base.roe, k) == v for k, v in roe_update.items()):
+            return  # unchanged
+        data = base.model_dump()
+        data["roe"].update(roe_update)
+        try:
+            new_eng = Engagement.model_validate(data)
+            yaml_text = render_yaml(EngagementSpec.model_validate(new_eng.model_dump()))
+        except Exception as exc:  # noqa: BLE001
+            self._log(f"invalid ROE — not applied: {exc}", _DANGER)
+            return
+        Path(self.engagement_path).write_text(yaml_text)
+        if self.engine is not None:
+            await self.engine.apply_engagement(new_eng, approved_by="operator")
+
     @work
     async def action_mode(self) -> None:
-        result = await self.push_screen_wait(ModeScreen(mode=self.mode))
+        result = await self.push_screen_wait(ModeScreen(mode=self.mode, roe=self._current_roe()))
         if result is None:
             return
-        self.mode = result
-        self._reset_mode()  # drop the engine so the next run rebuilds with the new mode
+        self.mode = result["mode"]
+        await self._apply_roe(result["roe"])   # raise/lower the hard ceiling
+        self._reset_mode()                       # re-clamp the ctx mode to the ROE, in place
         self._log(f"mode set: {self.mode.autonomy.name.lower()}/{self.mode.phase.name.lower()}", _MUTED)
 
     @work(group="scope")
