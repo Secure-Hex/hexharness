@@ -7,6 +7,7 @@ dependencies = [
     "pydantic>=2.6",
     "anthropic>=0.40",
     "pyyaml>=6",
+    "ddgs>=6.0",  # free default web_search backend (Tavily/Exa optional, via stdlib HTTP + key)
 ]
 
 [project.optional-dependencies]
@@ -23,7 +24,7 @@ reporting = ["jinja2>=3", "weasyprint>=60", "docxtpl>=0.16"]
 mcp = ["mcp>=1.0"]
 tui = ["textual>=0.60"]
 voice = ["sounddevice>=0.4", "faster-whisper>=1.0", "numpy>=1.26"]
-search = ["ddgs>=6.0"]  # free DuckDuckGo backend; Tavily/Exa need only an API key (stdlib HTTP)
+search = ["ddgs>=6.0"]  # kept for back-compat; ddgs is now a core dep so web_search works out of the box
 all = [
     "openai>=1.40", "google-genai>=0.3", "opentelemetry-sdk>=1.20",
     "websockets>=12", "jinja2>=3", "weasyprint>=60", "docxtpl>=0.16", "mcp>=1.0",
