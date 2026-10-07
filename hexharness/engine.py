@@ -41,6 +41,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     from hexharness.tools.native.services import (
         BannerGrabTool, FtpCheckTool, HttpProbeTool, SshInfoTool,
     )
+    from hexharness.tools.native.shodan import ShodanHostTool
     from hexharness.tools.native.websearch import WebSearchTool
 
     reg = ToolRegistry()
@@ -89,6 +90,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(DnsEnumTool(executor, image=sandbox_image))
     reg.register(SmbEnumTool(executor, image=sandbox_image))
     reg.register(WhoisLookupTool(executor, image=sandbox_image))
+    reg.register(ShodanHostTool(vault))  # needs SHODAN_API_KEY → demos the out-of-band secret flow
     # binary / reversing static analysis, workspace-confined (ACTIVE, host subprocess)
     reg.register(BinaryInfoTool(workspace))
     reg.register(ChecksecTool(workspace))
