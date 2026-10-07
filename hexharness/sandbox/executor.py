@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 
 class SandboxError(RuntimeError):
@@ -45,9 +46,25 @@ class SandboxExecutor:
         memory: str = "512m",
         pids_limit: int = 256,
         cap_add: list[str] | None = None,
+        workspace: str | Path | None = None,
     ) -> SandboxResult:
         if not self.available():
             raise SandboxError("docker not found on PATH")
+
+        # Mount the engagement workspace read-write at /workspace (and cd there) so files
+        # the command creates persist on the host and are shared with file_read/file_write.
+        mount: list[str] = []
+        if workspace is not None:
+            ws = Path(workspace).resolve()
+            ws.mkdir(parents=True, exist_ok=True)
+            # World-writable so the container can write regardless of uid remapping
+            # (rootless/userns Docker maps container-root to an unprivileged host uid).
+            # ponytail: it's a per-engagement scratch dir; 0777 is acceptable here.
+            try:
+                ws.chmod(0o777)
+            except OSError:
+                pass
+            mount = ["-v", f"{ws}:/workspace", "-w", "/workspace"]
 
         # Drop all caps, then add back only the ones the tool explicitly needs (e.g.
         # NET_RAW for nmap SYN/OS scans). no-new-privileges is dropped when caps are
@@ -61,6 +78,7 @@ class SandboxExecutor:
             "--network", network,
             *security,
             "--cap-drop", "ALL", *caps,
+            *mount,
             "--memory", memory,
             "--pids-limit", str(pids_limit),
             image, *argv,

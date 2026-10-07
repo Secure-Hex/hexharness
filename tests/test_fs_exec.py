@@ -38,7 +38,7 @@ class _FakeExecutor:
     def __init__(self):
         self.calls = []
 
-    async def run(self, image, argv, *, network="none", timeout=None, memory="512m", pids_limit=256):
+    async def run(self, image, argv, *, network="none", timeout=None, memory="512m", pids_limit=256, cap_add=None, workspace=None):
         self.calls.append((image, argv, network, timeout))
         return SandboxResult(0, "fake-out", "")
 

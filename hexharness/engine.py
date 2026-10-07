@@ -71,7 +71,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(FileReadTool(workspace))
     reg.register(FileWriteTool(workspace))
     # command execution, sandboxed (DESTRUCTIVE + approval)
-    reg.register(ExecCommandTool(executor, image=sandbox_image))
+    reg.register(ExecCommandTool(executor, image=sandbox_image, workspace=str(workspace)))
     # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
     reg.register(SkillInstallTool(skills, library))
     reg.register(McpConnectTool(reg, vault, secret_requester))
