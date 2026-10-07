@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rich.markdown import Markdown
 from rich.text import Text
 from textual import on, work
 from textual.app import App, ComposeResult
@@ -224,6 +225,13 @@ class HexTUI(App):
     def _log(self, text: str, style: str = _TEXT) -> None:
         self.query_one("#transcript", RichLog).write(Text(text, style=style))
 
+    def _log_markdown(self, text: str) -> None:
+        """Render model output as Markdown (headings, tables, lists, code) in the transcript."""
+        try:
+            self.query_one("#transcript", RichLog).write(Markdown(text))
+        except Exception:  # noqa: BLE001 — never let a render error drop the output
+            self._log(text, _TEXT)
+
     def _model_override(self) -> str | None:
         if self._selection["kind"] == "router":
             return None
@@ -305,12 +313,15 @@ class HexTUI(App):
         self.query_one("#thinking", Static).update(Text("💭 " + self._thinking_buf, style=_MUTED))
 
     def _flush_live(self) -> None:
-        if self._live_buf:
-            self._log(self._live_buf, _TEXT)
-            self._live_buf = ""
-            self.query_one("#live", Static).update("")
-        self._thinking_buf = ""
+        # Keep the reasoning in the scrollback (dim), before the answer — don't just hide it.
+        if self._thinking_buf:
+            self._log(f"💭 {self._thinking_buf}", _MUTED)
+            self._thinking_buf = ""
         self.query_one("#thinking", Static).update("")
+        if self._live_buf:
+            self._log_markdown(self._live_buf)  # render the model answer as Markdown
+            self._live_buf = ""
+        self.query_one("#live", Static).update("")
 
     # --- running ---
 
@@ -412,7 +423,7 @@ class HexTUI(App):
             # Streaming already showed every turn's text; only write the return value
             # when nothing streamed (e.g. a provider that doesn't support on_text yet).
             if not self._streamed:
-                self._log(result or "(no output)", _TEXT)
+                self._log_markdown(result or "(no output)")
         except RuntimeError as exc:
             # Most likely a missing API key — point the operator at the provider screen.
             self._log(f"provider error: {exc}  (Ctrl+P to configure)", _DANGER)
