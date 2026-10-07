@@ -24,7 +24,7 @@ from hexharness.tools.registry import ToolRegistry
 
 
 def default_registry(*, vault=None, secret_requester=None, workspace: str | Path | None = None,
-                     evidence=None, events=None) -> ToolRegistry:
+                     evidence=None, events=None, sandbox_image: str = "kalilinux/kali-rolling") -> ToolRegistry:
     from pathlib import Path
 
     from hexharness.control.secrets import DenySecretRequester
@@ -65,7 +65,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(FileReadTool(workspace))
     reg.register(FileWriteTool(workspace))
     # command execution, sandboxed (DESTRUCTIVE + approval)
-    reg.register(ExecCommandTool(executor))
+    reg.register(ExecCommandTool(executor, image=sandbox_image))
     # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
     reg.register(SkillInstallTool(skills, library))
     reg.register(McpConnectTool(reg, vault, secret_requester))
@@ -162,7 +162,7 @@ class Engine:
         workspace = Path(".hexharness") / slug / "workspace"
         reg = registry if registry is not None else default_registry(
             vault=vault, secret_requester=secret_requester, workspace=workspace,
-            evidence=evidence, events=events,
+            evidence=evidence, events=events, sandbox_image=eng.sandbox_image,
         )
         return cls(
             engagement=eng, events=events, evidence=evidence, control=control,
@@ -181,6 +181,10 @@ class Engine:
         new_budget.tokens_used = self.control.budget.tokens_used  # carry spend across the change
         new_budget.usd_used = self.control.budget.usd_used
         self.control.budget = new_budget
+        # Update the sandbox image live so exec_command uses the new engagement's image.
+        exec_tool = self.registry.get("exec_command")
+        if exec_tool is not None and hasattr(exec_tool, "image"):
+            exec_tool.image = engagement.sandbox_image
         self.ctx = ExecContext(
             engagement_id=engagement.name, subagent_id=self.ctx.subagent_id,
             mode=engagement.clamp(self.ctx.mode), now=self.ctx.now,  # re-clamp to the new ROE

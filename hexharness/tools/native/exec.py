@@ -19,13 +19,15 @@ class ExecCommandInput(BaseModel):
 
 class ExecCommandTool(Tool):
     name = "exec_command"
-    description = "Run a command inside the Docker sandbox. Destructive — requires approval."
+    description = "Run a command inside the Docker sandbox. Requires approval."
     input_model = ExecCommandInput
-    risk_level = RiskLevel.DESTRUCTIVE
+    # INTRUSIVE, not DESTRUCTIVE: it runs in a throwaway container (can't harm the host).
+    # Still requires approval — it is NOT scope-sensitive, so it can reach out over the network.
+    risk_level = RiskLevel.INTRUSIVE
     scope_sensitive = False
     requires_approval = True
 
-    def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "alpine:3.20"):
+    def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "kalilinux/kali-rolling"):
         self.executor = executor or SandboxExecutor()
         self.image = image
 

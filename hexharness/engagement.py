@@ -49,6 +49,7 @@ class Engagement(BaseModel):
     roe: _RoeModel = Field(default_factory=_RoeModel)
     budget: _BudgetModel = Field(default_factory=_BudgetModel)
     report_template: str = "default.html.j2"
+    sandbox_image: str = "kalilinux/kali-rolling"  # Docker image exec_command runs inside
 
     @classmethod
     def load(cls, path: str | Path) -> "Engagement":

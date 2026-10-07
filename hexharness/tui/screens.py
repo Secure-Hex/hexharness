@@ -709,6 +709,11 @@ class EngagementEditScreen(ModalScreen[dict]):
                 yield Static("Report", classes="cap-section")
                 yield Input(value=self._data["report_template"], placeholder="report template",
                             id="eng-report")
+
+                yield Static("Sandbox", classes="cap-section")
+                yield Label("  exec_command Docker image")
+                yield Input(value=self._data.get("sandbox_image", "kalilinux/kali-rolling"),
+                            placeholder="e.g. kalilinux/kali-rolling", id="eng-sandbox")
             with Horizontal(id="scope-edit-buttons"):
                 yield Button("Apply", variant="primary", id="scope-apply-btn")
                 yield Button("Cancel", id="scope-edit-cancel-btn")
@@ -794,6 +799,7 @@ class EngagementEditScreen(ModalScreen[dict]):
             "max_seconds": self._budget_val("#bud-seconds"),
         }
         data["report_template"] = self.query_one("#eng-report", Input).value.strip()
+        data["sandbox_image"] = self.query_one("#eng-sandbox", Input).value.strip() or "kalilinux/kali-rolling"
         self.dismiss(data)
 
     # --- interaction (one dispatcher keeps the per-button @on handlers from double-firing) ---
