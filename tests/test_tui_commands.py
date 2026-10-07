@@ -21,7 +21,7 @@ async def test_command_panel_toggles_and_lists():
         await pilot.pause()
         assert panel.display is True
         text = str(panel.render())
-        assert "Edit scope" in text and "Findings" in text and "/compact" in text
+        assert "Edit engagement" in text and "Findings" in text and "/compact" in text
         await pilot.press("ctrl+b")
         await pilot.pause()
         assert panel.display is False               # toggles back off

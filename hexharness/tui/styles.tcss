@@ -362,15 +362,23 @@ ScopeEditScreen { align: center middle; }
     border: round $hh-border;
 }
 .scope-add-row > Input:focus { border: round $hh-accent; }
-#scope-entries {
+#scope-entries, #window-entries {
     height: auto;
     max-height: 12;
     background: $hh-background;
     border: round $hh-border;
     margin-bottom: 1;
 }
-#scope-entries > ListItem { background: $hh-background; color: $hh-text; padding: 0 1; }
-#scope-entries > ListItem.--highlight { background: $hh-border; color: $hh-accent; }
+#scope-entries > ListItem, #window-entries > ListItem { background: $hh-background; color: $hh-text; padding: 0 1; }
+#scope-entries > ListItem.--highlight, #window-entries > ListItem.--highlight { background: $hh-border; color: $hh-accent; }
+/* plain single-field inputs in the engagement editor (identity / budget / report) */
+#eng-name, #eng-client, #bud-tokens, #bud-usd, #bud-seconds, #eng-report {
+    background: $hh-background;
+    border: round $hh-border;
+    margin-bottom: 1;
+}
+#eng-name:focus, #eng-client:focus, #bud-tokens:focus, #bud-usd:focus,
+#bud-seconds:focus, #eng-report:focus { border: round $hh-accent; }
 #scope-edit-buttons { height: auto; padding-top: 1; align-horizontal: left; }
 
 /* toggleable commands side panel (Ctrl+B) */

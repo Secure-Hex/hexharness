@@ -25,11 +25,11 @@ from hexharness.tui import providers
 from hexharness.tui.providers import build, entry, model_for, router_spec
 from hexharness.tui.screens import (
     CapabilitiesScreen,
+    EngagementEditScreen,
     FindingsScreen,
     ModeScreen,
     ProviderScreen,
     ScopeApprovalModal,
-    ScopeEditScreen,
 )
 
 DEFAULT_ENGAGEMENT = "engagements/example.engagement.yaml"
@@ -62,7 +62,7 @@ class HexTUI(App):
         Binding("ctrl+k", "kill", "Kill switch", show=False),
         Binding("ctrl+l", "clear", "Clear", show=False),
         Binding("ctrl+o", "mode", "Mode", show=False),
-        Binding("ctrl+e", "edit_scope", "Edit scope", priority=True, show=False),  # TextArea also uses ctrl+e
+        Binding("ctrl+e", "edit_scope", "Edit engagement", priority=True, show=False),  # TextArea also uses ctrl+e
         Binding("ctrl+r", "dictate", "Dictate", show=False),
         Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
         Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
@@ -75,7 +75,7 @@ class HexTUI(App):
     COMMANDS = [
         ("Ctrl+B", "Toggle this commands panel"),
         ("Ctrl+P", "Pick / register a provider"),
-        ("Ctrl+E", "Edit scope (add/remove domains, CIDRs, exclusions)"),
+        ("Ctrl+E", "Edit engagement (name, scope, ROE, windows, budget, report)"),
         ("Ctrl+O", "Set mode (autonomy / phase)"),
         ("Ctrl+T", "Capabilities (tools, skills, secrets, web backend)"),
         ("Ctrl+F", "Findings (confirm / reject candidates)"),
@@ -501,26 +501,25 @@ class HexTUI(App):
 
     @work(group="scope")
     async def action_edit_scope(self) -> None:
-        """Manual scope editor: the operator edits scope directly (no model involved),
-        then we validate, persist to the engagement file, and apply it live if running.
-        This editor IS the human action, so applying needs no extra approval modal."""
+        """Full engagement editor: the operator edits every setting directly (no model
+        involved), then we validate, persist to the engagement file, and apply it live if
+        running. This editor IS the human action, so applying needs no extra approval modal.
+        The screen returns a COMPLETE engagement-data dict ready for model_validate."""
         from hexharness.engagement import Engagement
         from hexharness.engagement_builder import EngagementSpec, render_yaml
 
         base = self.engine.engagement if self.engine is not None else Engagement.load(self.engagement_path)
-        result = await self.push_screen_wait(ScopeEditScreen(engagement=base))
+        result = await self.push_screen_wait(EngagementEditScreen(engagement=base))
         if result is None:
             return
-        data = base.model_dump()
-        data["scope"] = result["scope"]
-        data["roe"].update(result["roe"])  # new ceiling; keep existing windows
         try:
-            # model_validate accepts any string; render_yaml builds the runtime scope guard,
-            # so a bad CIDR / invalid scope raises HERE — before we persist or apply.
-            new_eng = Engagement.model_validate(data)
+            # model_validate coerces/validates every field (budget numbers included);
+            # render_yaml builds the runtime scope guard + ROE, so a bad CIDR, number or
+            # time window raises HERE — before we persist or apply.
+            new_eng = Engagement.model_validate(result)
             yaml_text = render_yaml(EngagementSpec.model_validate(new_eng.model_dump()))
-        except Exception as exc:  # noqa: BLE001 — surface the invalid scope, don't apply
-            self._log(f"invalid scope — not applied: {exc}", _DANGER)
+        except Exception as exc:  # noqa: BLE001 — surface the invalid engagement, don't apply
+            self._log(f"invalid engagement — not applied: {exc}", _DANGER)
             return
 
         Path(self.engagement_path).write_text(yaml_text)  # survives restart
@@ -530,7 +529,7 @@ class HexTUI(App):
                 self.loop.ctx = self.engine.ctx  # live loop adopts the re-clamped context
             # SCOPE_CHANGED is logged by the existing _on_event handler.
         else:
-            self._log("scope saved — applies on the next run", _SUCCESS)
+            self._log("engagement saved — applies on the next run", _SUCCESS)
             self._sync_header()
 
     @work(exclusive=True, group="dictate")

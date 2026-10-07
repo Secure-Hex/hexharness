@@ -621,12 +621,14 @@ class ScopeApprovalModal(ModalScreen[bool]):
         self.dismiss(True)
 
 
-class ScopeEditScreen(ModalScreen[dict]):
-    """Manual scope editor: the operator edits the engagement's domains / CIDRs /
-    exclusions directly and applies them WITHOUT involving the model. This dialog IS the
-    human action, so it needs no extra approval gate. Dismisses with the edited scope as
-    {"domains":[...], "cidrs":[...], "exclusions":[...]} on Apply, or None on Cancel/Esc.
-    CIDR validity is checked by the apply path, not here."""
+class EngagementEditScreen(ModalScreen[dict]):
+    """Full engagement editor: the operator edits EVERY engagement setting directly
+    (name, client, scope, ROE ceiling + time windows, budget, report template) and applies
+    it WITHOUT involving the model. This dialog IS the human action, so it needs no extra
+    approval gate. Dismisses on Apply with a COMPLETE engagement-data dict ready for
+    `Engagement.model_validate(...)` — the passed engagement's `.model_dump()` with the
+    edited fields overlaid — or None on Cancel/Esc. Field validity (bad CIDR, bad number,
+    bad time window) is checked by the apply path, not here."""
 
     BINDINGS = [("escape", "dismiss", "Cancel")]
 
@@ -640,8 +642,10 @@ class ScopeEditScreen(ModalScreen[dict]):
 
     def __init__(self, *, engagement: Any) -> None:
         super().__init__()
+        # Full snapshot — apply overlays the edited fields onto this and dismisses it whole.
+        self._data = engagement.model_dump()
         self._name = engagement.name
-        # Working copy — edits never touch the source engagement until the app applies.
+        # Working copies — edits never touch the source engagement until the app applies.
         self._scope = {
             "domains": list(engagement.scope.domains),
             "cidrs": list(engagement.scope.cidrs),
@@ -652,35 +656,68 @@ class ScopeEditScreen(ModalScreen[dict]):
             "max_autonomy": engagement.roe.max_autonomy,
             "max_phase": engagement.roe.max_phase,
         }
+        self._windows = [{"start": w.start, "end": w.end} for w in engagement.roe.windows]
 
     _ROE_CHOICES = ROE_CHOICES  # shared with the Mode screen
 
+    @staticmethod
+    def _as_str(value: Any) -> str:
+        return "" if value is None else str(value)
+
     def compose(self) -> ComposeResult:
+        b = self._data["budget"]
         with Vertical(id="scope-edit-panel"):
-            yield Static(f"Edit scope & ROE · {self._name}", id="scope-edit-title")
-            yield Static("Edit the engagement scope directly, then Apply. The model is not involved.",
+            yield Static(f"Edit engagement · {self._name}", id="scope-edit-title")
+            yield Static("Edit the engagement directly, then Apply. The model is not involved.",
                          classes="dim")
             with VerticalScroll(id="scope-edit-body"):
+                yield Static("Identity", classes="cap-section")
+                yield Input(value=self._name, placeholder="engagement name", id="eng-name")
+                yield Input(value=self._data["client"], placeholder="client", id="eng-client")
+
+                yield Static("Scope", classes="cap-section")
                 for key, _prefix, placeholder in self._GROUPS:
                     with Horizontal(classes="scope-add-row"):
                         yield Input(placeholder=placeholder, id=f"add-{key}")
                         yield Button("Add", id=f"add-{key}-btn")
                 yield ListView(id="scope-entries")
                 yield Button("Remove selected", id="scope-remove-btn")
+
                 yield Static("ROE ceiling (the hard cap — raise it to allow riskier tools)",
                              classes="cap-section")
                 for field, choices in self._ROE_CHOICES.items():
                     yield Label(f"  {field}")
                     yield Select([(c, c) for c in choices], value=self._roe[field],
                                  allow_blank=False, id=f"roe-{field.replace('_', '-')}")
+
+                yield Static("Time windows (HH:MM — empty list = anytime)", classes="cap-section")
+                with Horizontal(classes="scope-add-row"):
+                    yield Input(placeholder="start (e.g. 09:00)", id="win-start")
+                    yield Input(placeholder="end (e.g. 18:00)", id="win-end")
+                    yield Button("Add", id="window-add-btn")
+                yield ListView(id="window-entries")
+                yield Button("Remove selected", id="window-remove-btn")
+
+                yield Static("Budget (empty = unlimited)", classes="cap-section")
+                yield Label("  max_tokens")
+                yield Input(value=self._as_str(b["max_tokens"]), placeholder="unlimited", id="bud-tokens")
+                yield Label("  max_usd")
+                yield Input(value=self._as_str(b["max_usd"]), placeholder="unlimited", id="bud-usd")
+                yield Label("  max_seconds")
+                yield Input(value=self._as_str(b["max_seconds"]), placeholder="unlimited", id="bud-seconds")
+
+                yield Static("Report", classes="cap-section")
+                yield Input(value=self._data["report_template"], placeholder="report template",
+                            id="eng-report")
             with Horizontal(id="scope-edit-buttons"):
                 yield Button("Apply", variant="primary", id="scope-apply-btn")
                 yield Button("Cancel", id="scope-edit-cancel-btn")
 
     async def on_mount(self) -> None:
         await self._refresh()
+        await self._refresh_windows()
 
-    # --- the combined entry list (domain/cidr/exclude rows in group order) ---
+    # --- the combined scope entry list (domain/cidr/exclude rows in group order) ---
 
     def _entries(self) -> list[tuple[str, str]]:
         return [(key, v) for key, _p, _ph in self._GROUPS for v in self._scope[key]]
@@ -709,24 +746,78 @@ class ScopeEditScreen(ModalScreen[dict]):
         self._scope[key].remove(value)
         await self._refresh()
 
+    # --- time windows (same async-safe add/remove-by-index pattern as scope) ---
+
+    async def _refresh_windows(self) -> None:
+        lst = self.query_one("#window-entries", ListView)
+        await lst.clear()
+        for w in self._windows:
+            lst.append(ListItem(Label(f"{w['start']} – {w['end']}")))
+
+    async def _add_window(self) -> None:
+        start = self.query_one("#win-start", Input).value.strip()
+        end = self.query_one("#win-end", Input).value.strip()
+        if start and end:
+            self._windows.append({"start": start, "end": end})
+            self.query_one("#win-start", Input).value = ""
+            self.query_one("#win-end", Input).value = ""
+        await self._refresh_windows()
+
+    async def _remove_window(self) -> None:
+        idx = self.query_one("#window-entries", ListView).index
+        if idx is None or not 0 <= idx < len(self._windows):
+            return
+        del self._windows[idx]
+        await self._refresh_windows()
+
+    # --- apply: overlay the edited fields onto the full snapshot and dismiss it whole ---
+
+    def _budget_val(self, selector: str) -> Any:
+        # ponytail: empty -> None (unlimited); otherwise pass the raw string straight to
+        # pydantic, which coerces int/float and raises on a bad number at the apply path.
+        raw = self.query_one(selector, Input).value.strip()
+        return raw or None
+
+    def _apply(self) -> None:
+        data = dict(self._data)
+        data["name"] = self.query_one("#eng-name", Input).value.strip()
+        data["client"] = self.query_one("#eng-client", Input).value.strip()
+        data["scope"] = self._scope
+        roe = dict(self._data["roe"])
+        for f in self._ROE_CHOICES:
+            roe[f] = self.query_one(f"#roe-{f.replace('_', '-')}", Select).value
+        roe["windows"] = list(self._windows)
+        data["roe"] = roe
+        data["budget"] = {
+            "max_tokens": self._budget_val("#bud-tokens"),
+            "max_usd": self._budget_val("#bud-usd"),
+            "max_seconds": self._budget_val("#bud-seconds"),
+        }
+        data["report_template"] = self.query_one("#eng-report", Input).value.strip()
+        self.dismiss(data)
+
     # --- interaction (one dispatcher keeps the per-button @on handlers from double-firing) ---
 
     @on(Input.Submitted)
     async def _input_submitted(self, event: Input.Submitted) -> None:
         bid = event.input.id or ""
-        if bid.startswith("add-"):
+        if bid in ("win-start", "win-end"):
+            await self._add_window()
+        elif bid.startswith("add-"):
             await self._add(bid.removeprefix("add-"))
 
     @on(Button.Pressed)
     async def _pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id or ""
         if bid == "scope-apply-btn":
-            roe = {f: self.query_one(f"#roe-{f.replace('_', '-')}", Select).value
-                   for f in self._ROE_CHOICES}
-            self.dismiss({"scope": self._scope, "roe": roe})
+            self._apply()
         elif bid == "scope-edit-cancel-btn":
             self.dismiss(None)
         elif bid == "scope-remove-btn":
             await self._remove_selected()
+        elif bid == "window-add-btn":
+            await self._add_window()
+        elif bid == "window-remove-btn":
+            await self._remove_window()
         elif bid.startswith("add-") and bid.endswith("-btn"):
             await self._add(bid.removeprefix("add-").removesuffix("-btn"))
