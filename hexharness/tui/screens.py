@@ -648,53 +648,54 @@ class ScopeEditScreen(ModalScreen[dict]):
                 yield Button("Apply", variant="primary", id="scope-apply-btn")
                 yield Button("Cancel", id="scope-edit-cancel-btn")
 
-    def on_mount(self) -> None:
-        self._refresh()
+    async def on_mount(self) -> None:
+        await self._refresh()
 
     # --- the combined entry list (domain/cidr/exclude rows in group order) ---
 
     def _entries(self) -> list[tuple[str, str]]:
         return [(key, v) for key, _p, _ph in self._GROUPS for v in self._scope[key]]
 
-    def _refresh(self) -> None:
+    async def _refresh(self) -> None:
         lst = self.query_one("#scope-entries", ListView)
-        lst.clear()
-        for i, (key, value) in enumerate(self._entries()):
-            lst.append(ListItem(Label(f"{self._PREFIX[key]}: {value}"), id=f"entry-{i}"))
+        await lst.clear()  # async: await before re-adding or the old items collide
+        # No per-item id — removal is by highlighted index, and ids would clash on re-add.
+        for key, value in self._entries():
+            lst.append(ListItem(Label(f"{self._PREFIX[key]}: {value}")))
 
-    def _add(self, key: str) -> None:
+    async def _add(self, key: str) -> None:
         inp = self.query_one(f"#add-{key}", Input)
         value = inp.value.strip()
         if value and value not in self._scope[key]:
             self._scope[key].append(value)
         inp.value = ""
-        self._refresh()
+        await self._refresh()
 
-    def _remove_selected(self) -> None:
+    async def _remove_selected(self) -> None:
         idx = self.query_one("#scope-entries", ListView).index
         entries = self._entries()
         if idx is None or not 0 <= idx < len(entries):
             return
         key, value = entries[idx]
         self._scope[key].remove(value)
-        self._refresh()
+        await self._refresh()
 
     # --- interaction (one dispatcher keeps the per-button @on handlers from double-firing) ---
 
     @on(Input.Submitted)
-    def _input_submitted(self, event: Input.Submitted) -> None:
+    async def _input_submitted(self, event: Input.Submitted) -> None:
         bid = event.input.id or ""
         if bid.startswith("add-"):
-            self._add(bid.removeprefix("add-"))
+            await self._add(bid.removeprefix("add-"))
 
     @on(Button.Pressed)
-    def _pressed(self, event: Button.Pressed) -> None:
+    async def _pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id or ""
         if bid == "scope-apply-btn":
             self.dismiss(self._scope)
         elif bid == "scope-edit-cancel-btn":
             self.dismiss(None)
         elif bid == "scope-remove-btn":
-            self._remove_selected()
+            await self._remove_selected()
         elif bid.startswith("add-") and bid.endswith("-btn"):
-            self._add(bid.removeprefix("add-").removesuffix("-btn"))
+            await self._add(bid.removeprefix("add-").removesuffix("-btn"))

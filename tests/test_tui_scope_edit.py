@@ -79,3 +79,31 @@ async def test_invalid_cidr_not_applied():
         assert app.engine.engagement.scope.cidrs == before  # unchanged
         assert not any(e.type is EventType.SCOPE_CHANGED for e in app.engine.events.all())
         assert any("invalid scope" in t.lower() for t in logs)
+
+
+async def test_add_entry_no_duplicate_id_crash():
+    """Regression: adding a scope entry used to crash with DuplicateIds because
+    ListView.clear() is async and items were re-added with fixed ids before removal."""
+    import pytest
+    pytest.importorskip("textual")
+    from textual.app import App
+    from textual.widgets import Input, ListView
+    from hexharness.engagement import Engagement
+    from hexharness.tui.screens import ScopeEditScreen
+
+    class _H(App):
+        def compose(self):
+            return []
+
+    app = _H()
+    async with app.run_test(size=(100, 30)) as pilot:
+        app.push_screen(ScopeEditScreen(engagement=Engagement.load("engagements/example.engagement.yaml")))
+        for _ in range(4):
+            await pilot.pause()
+        scr = app.screen
+        before = len(scr.query_one("#scope-entries", ListView).children)
+        scr.query_one("#add-domains", Input).value = "*.new.example"
+        await scr._add("domains")
+        for _ in range(3):
+            await pilot.pause()
+        assert len(scr.query_one("#scope-entries", ListView).children) == before + 1
