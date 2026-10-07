@@ -640,10 +640,23 @@ class HexTUI(App):
 
         return str(Path("engagements") / f"{_slug(name)}.engagement.yaml")
 
-    def _current_roe(self) -> dict:
+    def _base_engagement(self):
+        """The engagement to read/edit: the running one, else the file on disk, else the
+        unconfigured default (blank launch, nothing running yet). Never returns None, so
+        callers can't hit Path(None)."""
         from hexharness.engagement import Engagement
 
-        eng = self.engine.engagement if self.engine is not None else Engagement.load(self.engagement_path)
+        if self.engine is not None:
+            return self.engine.engagement
+        if self.engagement_path is not None:
+            return Engagement.load(self.engagement_path)
+        return Engagement.model_validate({
+            "name": "unconfigured", "client": "",
+            "scope": {}, "roe": {"max_risk": "passive", "max_autonomy": "report", "max_phase": "recon"},
+        })
+
+    def _current_roe(self) -> dict:
+        eng = self._base_engagement()
         return {"max_risk": eng.roe.max_risk, "max_autonomy": eng.roe.max_autonomy,
                 "max_phase": eng.roe.max_phase}
 
@@ -652,7 +665,7 @@ class HexTUI(App):
         from hexharness.engagement import Engagement
         from hexharness.engagement_builder import EngagementSpec, render_yaml
 
-        base = self.engine.engagement if self.engine is not None else Engagement.load(self.engagement_path)
+        base = self._base_engagement()
         if all(getattr(base.roe, k) == v for k, v in roe_update.items()):
             return  # unchanged
         data = base.model_dump()
@@ -663,13 +676,19 @@ class HexTUI(App):
         except Exception as exc:  # noqa: BLE001
             self._log(f"invalid ROE — not applied: {exc}", _DANGER)
             return
-        blank = self.engagement_path is None
+        was_blank = self.engagement_path is None
         target = self.engagement_path or self._engagement_file(new_eng.name)
         Path(target).parent.mkdir(parents=True, exist_ok=True)
         Path(target).write_text(yaml_text)
-        if blank:
+        if self.engine is None:
+            # Nothing running yet (e.g. Ctrl+O before any prompt): persist only — building
+            # an engine needs a provider the operator may not have picked. Adopt the path so
+            # the next run resumes it.
+            self.engagement_path = target
+            self._log("engagement saved — applies on the next run", _SUCCESS)
+        elif was_blank:
             self._activate_from_file(target)  # blank -> file-backed engine under its slug
-        elif self.engine is not None:
+        else:
             await self.engine.apply_engagement(new_eng, approved_by="operator")
 
     @work
@@ -694,7 +713,7 @@ class HexTUI(App):
         from hexharness.engagement import Engagement
         from hexharness.engagement_builder import EngagementSpec, render_yaml
 
-        base = self.engine.engagement if self.engine is not None else Engagement.load(self.engagement_path)
+        base = self._base_engagement()
         result = await self.push_screen_wait(EngagementEditScreen(engagement=base))
         if result is None:
             return
@@ -708,21 +727,23 @@ class HexTUI(App):
             self._log(f"invalid engagement — not applied: {exc}", _DANGER)
             return
 
-        blank = self.engagement_path is None
+        was_blank = self.engagement_path is None
         target = self.engagement_path or self._engagement_file(new_eng.name)
         Path(target).parent.mkdir(parents=True, exist_ok=True)
         Path(target).write_text(yaml_text)  # survives restart
-        if blank:
+        if self.engine is None:
+            # Nothing running yet: persist only (building an engine needs a provider).
+            self.engagement_path = target
+            self._log("engagement saved — applies on the next run", _SUCCESS)
+            self._sync_header()
+        elif was_blank:
             self._activate_from_file(target)  # blank -> file-backed engine under its slug
             self._log(f"engagement configured: {new_eng.name} — scope is now active", _SUCCESS)
-        elif self.engine is not None:
+        else:
             await self.engine.apply_engagement(new_eng, approved_by="operator")
             if self.loop is not None:
                 self.loop.ctx = self.engine.ctx  # live loop adopts the re-clamped context
             # SCOPE_CHANGED is logged by the existing _on_event handler.
-        else:
-            self._log("engagement saved — applies on the next run", _SUCCESS)
-            self._sync_header()
 
     @work(exclusive=True, group="dictate")
     async def action_dictate(self) -> None:
