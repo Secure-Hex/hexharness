@@ -113,14 +113,23 @@ def _parser() -> argparse.ArgumentParser:
 
     t = sub.add_parser("tui", help="launch the terminal UI")
     t.add_argument("--engagement", default="engagements/example.engagement.yaml")
+
+    sub.add_parser("build-image", help="build the HexHarness sandbox image (Kali + tools)")
     return p
 
 
 def main() -> int:
     argv = sys.argv[1:]
-    if argv and argv[0] not in ("run", "init", "tui", "-h", "--help"):
+    if argv and argv[0] not in ("run", "init", "tui", "build-image", "-h", "--help"):
         argv = ["run", *argv]  # back-compat: bare prompt => run
     args = _parser().parse_args(argv)
+
+    if args.cmd == "build-image":
+        from hexharness.sandbox.image import DEFAULT_SANDBOX_IMAGE, build_image
+
+        ok, out = asyncio.run(build_image(DEFAULT_SANDBOX_IMAGE, on_output=print))
+        print(f"\n{'built' if ok else 'failed'}: {DEFAULT_SANDBOX_IMAGE}")
+        return 0 if ok else 1
 
     if args.cmd == "tui":
         from hexharness.tui.app import HexTUI  # textual only imported here

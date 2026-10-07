@@ -47,7 +47,7 @@ class EngagementSpec(BaseModel):
     roe: RoeSpec = Field(default_factory=RoeSpec)
     budget: BudgetSpec = Field(default_factory=BudgetSpec)
     report_template: str = "default.html.j2"
-    sandbox_image: str = "kalilinux/kali-rolling"
+    sandbox_image: str = "hexharness/kali:latest"
 
 
 def validate_spec(spec: EngagementSpec) -> Engagement:

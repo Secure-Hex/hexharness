@@ -47,9 +47,19 @@ class SandboxExecutor:
         pids_limit: int = 256,
         cap_add: list[str] | None = None,
         workspace: str | Path | None = None,
+        drop_caps: bool = True,
     ) -> SandboxResult:
         if not self.available():
             raise SandboxError("docker not found on PATH")
+
+        # Auto-build the HexHarness sandbox image from the packaged Dockerfile the first
+        # time it's needed, so the tooled Kali travels with the pip package.
+        from hexharness.sandbox.image import build_image, image_exists, is_hexharness_image
+
+        if is_hexharness_image(image) and not image_exists(image, docker_bin=self.docker_bin):
+            ok, out = await build_image(image, docker_bin=self.docker_bin)
+            if not ok:
+                raise SandboxError(f"failed to build sandbox image {image}:\n{out}")
 
         # Mount the engagement workspace read-write at /workspace (and cd there) so files
         # the command creates persist on the host and are shared with file_read/file_write.
@@ -66,18 +76,23 @@ class SandboxExecutor:
                 pass
             mount = ["-v", f"{ws}:/workspace", "-w", "/workspace"]
 
-        # Drop all caps, then add back only the ones the tool explicitly needs (e.g.
-        # NET_RAW for nmap SYN/OS scans). no-new-privileges is dropped when caps are
-        # granted, since it would block them from taking effect.
-        caps: list[str] = []
+        # Capabilities. drop_caps=True (default, for scanners): drop ALL and add back only
+        # what's asked (e.g. NET_RAW). drop_caps=False (for exec_command): keep Docker's
+        # default caps so apt-get/dpkg and ordinary tooling work — the operator wants a
+        # real working box there. --rm, pid/memory limits and the workspace mount still apply.
+        cap_flags: list[str] = []
         for c in cap_add or []:
-            caps += ["--cap-add", c]
-        security = [] if cap_add else ["--security-opt", "no-new-privileges"]
+            cap_flags += ["--cap-add", c]
+        if drop_caps:
+            cap_flags = ["--cap-drop", "ALL", *cap_flags]
+            security = [] if cap_add else ["--security-opt", "no-new-privileges"]
+        else:
+            security = []  # default caps; allow setuid helpers (apt/dpkg)
         cmd = [
             self.docker_bin, "run", "--rm",
             "--network", network,
             *security,
-            "--cap-drop", "ALL", *caps,
+            *cap_flags,
             *mount,
             "--memory", memory,
             "--pids-limit", str(pids_limit),

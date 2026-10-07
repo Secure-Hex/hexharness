@@ -38,7 +38,7 @@ class _FakeExecutor:
     def __init__(self):
         self.calls = []
 
-    async def run(self, image, argv, *, network="none", timeout=None, memory="512m", pids_limit=256, cap_add=None, workspace=None):
+    async def run(self, image, argv, *, network="none", timeout=None, memory="512m", pids_limit=256, cap_add=None, workspace=None, drop_caps=True):
         self.calls.append((image, argv, network, timeout))
         return SandboxResult(0, "fake-out", "")
 
@@ -50,7 +50,7 @@ async def test_exec_forwards_argv_as_list():
     image, argv, network, timeout = fake.calls[0]
     assert argv == ["echo", "hi; rm -rf /"]  # passed through intact, never joined
     assert isinstance(argv, list)
-    assert (image, network, timeout) == ("alpine:3.20", "none", 5)
+    assert (image, network, timeout) == ("alpine:3.20", "bridge", 5)
     assert out == "fake-out"
 
 

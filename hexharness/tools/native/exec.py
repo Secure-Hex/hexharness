@@ -13,7 +13,7 @@ from hexharness.tools.base import RiskLevel, Tool
 
 class ExecCommandInput(BaseModel):
     argv: list[str] = Field(description="Command and args as a list (no shell), e.g. ['id']")
-    network: str = Field(default="none", description="Docker network mode ('none' or 'bridge')")
+    network: str = Field(default="bridge", description="Docker network mode ('bridge' or 'none')")
     timeout: int = Field(default=60, description="Seconds before the container is killed")
 
 
@@ -28,7 +28,7 @@ class ExecCommandTool(Tool):
     scope_sensitive = False
     requires_approval = True
 
-    def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "kalilinux/kali-rolling",
+    def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "hexharness/kali:latest",
                  workspace: str | None = None):
         self.executor = executor or SandboxExecutor()
         self.image = image
@@ -40,9 +40,10 @@ class ExecCommandTool(Tool):
             result = await self.executor.run(
                 self.image,
                 argv,
-                network=tool_input.get("network", "none"),
+                network=tool_input.get("network", "bridge"),
                 timeout=tool_input.get("timeout", 60),
                 workspace=self.workspace,
+                drop_caps=False,  # full box: apt-get/dpkg and setuid helpers must work
             )
         except SandboxError as e:
             return f"sandbox unavailable: {e}"

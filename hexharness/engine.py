@@ -24,7 +24,7 @@ from hexharness.tools.registry import ToolRegistry
 
 
 def default_registry(*, vault=None, secret_requester=None, workspace: str | Path | None = None,
-                     evidence=None, events=None, sandbox_image: str = "kalilinux/kali-rolling") -> ToolRegistry:
+                     evidence=None, events=None, sandbox_image: str = "hexharness/kali:latest") -> ToolRegistry:
     from pathlib import Path
 
     from hexharness.control.secrets import DenySecretRequester
@@ -81,7 +81,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(PostmanRunTool())
     # scope-sensitive / sandboxed network
     reg.register(DnsLookupTool())
-    reg.register(PortScanTool(executor))
+    reg.register(PortScanTool(executor, image=sandbox_image))
     # network service probes (ACTIVE, scope-sensitive — Scope Guard checks the host/url)
     reg.register(BannerGrabTool())
     reg.register(FtpCheckTool())

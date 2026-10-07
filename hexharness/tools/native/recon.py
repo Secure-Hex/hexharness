@@ -165,7 +165,7 @@ class SmbEnumTool(Tool):
     requires_approval = True
     target_field = "host"
 
-    def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "kalilinux/kali-rolling"):
+    def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "hexharness/kali:latest"):
         self.executor = executor or SandboxExecutor()
         self.image = image
 

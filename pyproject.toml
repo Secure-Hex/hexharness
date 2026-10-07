@@ -39,6 +39,16 @@ hexharness = "hexharness.__main__:main"
 [tool.setuptools.packages.find]
 include = ["hexharness*"]
 
+# Non-.py data that must ship in the wheel: the Kali Dockerfile (so the sandbox image
+# can be built from the installed package) plus skills/knowledge/reporting assets.
+[tool.setuptools.package-data]
+hexharness = [
+    "sandbox/docker/*",
+    "skills/library/**/*",
+    "knowledge/data/**/*",
+    "reporting/templates/**/*",
+]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
