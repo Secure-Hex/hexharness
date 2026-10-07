@@ -12,7 +12,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, ListItem, ListView, SelectionList, Static
 
 from hexharness.control.policy import Autonomy, Mode, Phase
-from hexharness.tui.providers import CATALOG, ProviderEntry, detect, model_for, register
+from hexharness.tui.providers import ProviderEntry, all_entries, detect, model_for, register
 
 # Skills live next to the package: hexharness/skills/library.
 _SKILLS_LIBRARY = Path(__file__).resolve().parent.parent / "skills" / "library"
@@ -40,8 +40,18 @@ class ProviderScreen(ModalScreen[dict]):
 
     def __init__(self) -> None:
         super().__init__()
-        self._active: str = CATALOG[0].key
+        # Catalog + saved custom providers; snapshot once so the list is stable for the
+        # screen's lifetime (registering a key only flips badges, never the membership).
+        self._entries: list[ProviderEntry] = all_entries()
+        # Widget IDs can't contain ":" (custom keys look like "custom:mygw"), so map a
+        # DOM-safe id back to the real provider key.
+        self._id_to_key: dict[str, str] = {self._key_id(e): e.key for e in self._entries}
+        self._active: str = self._entries[0].key
         self._router_order: list[str] = []  # selection order == fallback order
+
+    @staticmethod
+    def _key_id(e: ProviderEntry) -> str:
+        return e.key.replace(":", "_")
 
     def compose(self) -> ComposeResult:
         with Vertical(id="provider-panel"):
@@ -49,7 +59,7 @@ class ProviderScreen(ModalScreen[dict]):
             # Scrollable content so a long provider list never pushes the buttons off-screen.
             with VerticalScroll(id="provider-scroll"):
                 yield ListView(
-                    *[ListItem(Label(_row(e)), id=f"prov-{e.key}") for e in CATALOG],
+                    *[ListItem(Label(_row(e)), id=f"prov-{self._key_id(e)}") for e in self._entries],
                     id="prov-list",
                 )
                 yield Input(placeholder="model override (optional)", id="model-input")
@@ -58,7 +68,7 @@ class ProviderScreen(ModalScreen[dict]):
                     yield Button("Register", id="register-btn")
                 yield Static("Router members (space to toggle; order = fallback order):", classes="dim")
                 yield SelectionList[str](
-                    *[(e.label, e.key) for e in CATALOG], id="router-list",
+                    *[(e.label, e.key) for e in self._entries], id="router-list",
                 )
                 yield Static("", id="prov-status", classes="dim")
             # Action buttons stay OUTSIDE the scroll => always visible.
@@ -77,7 +87,7 @@ class ProviderScreen(ModalScreen[dict]):
     @on(ListView.Highlighted, "#prov-list")
     def _highlight(self, event: ListView.Highlighted) -> None:
         if event.item and event.item.id:
-            self._active = event.item.id.removeprefix("prov-")
+            self._active = self._id_to_key.get(event.item.id.removeprefix("prov-"), self._active)
             self._sync_secret_placeholder()
 
     @on(SelectionList.SelectedChanged, "#router-list")
@@ -89,11 +99,16 @@ class ProviderScreen(ModalScreen[dict]):
 
     def _sync_secret_placeholder(self) -> None:
         e = self._entry()
-        ph = "base_url (blank = default)" if e.needs_base_url else f"{e.required_env[0]} value"
+        if e.needs_base_url:
+            ph = "base_url (blank = default)"
+        elif e.required_env:
+            ph = f"{e.required_env[0]} value"
+        else:
+            ph = "saved custom — key already stored"
         self.query_one("#secret-input", Input).placeholder = ph
 
     def _entry(self) -> ProviderEntry:
-        return next(e for e in CATALOG if e.key == self._active)
+        return next(e for e in self._entries if e.key == self._active)
 
     @on(Button.Pressed, "#register-btn")
     def _register(self) -> None:
@@ -116,8 +131,8 @@ class ProviderScreen(ModalScreen[dict]):
         lst = self.query_one("#prov-list", ListView)
         idx = lst.index
         lst.clear()
-        for e in CATALOG:
-            lst.append(ListItem(Label(_row(e)), id=f"prov-{e.key}"))
+        for e in self._entries:
+            lst.append(ListItem(Label(_row(e)), id=f"prov-{self._key_id(e)}"))
         lst.index = idx
 
     @on(Button.Pressed, "#use-btn")

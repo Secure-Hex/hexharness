@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 from dataclasses import dataclass
 
 from hexharness.providers.base import LLMProvider
@@ -70,11 +71,41 @@ CATALOG += [
     for key, label, env, base_url, default_model in _OAI_COMPAT
 ]
 
-_BY_KEY = {e.key: e for e in CATALOG}
+def _slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def _saved_custom(slug: str) -> dict | None:
+    """The persisted custom provider (incl. api_key) whose name slugs to `slug`."""
+    from hexharness.tui.config import load_custom_providers
+
+    return next((c for c in load_custom_providers() if _slug(c.get("name") or "") == slug), None)
+
+
+def saved_custom_entries() -> list[ProviderEntry]:
+    """One ProviderEntry per persisted custom provider, so saved gateways appear as
+    selectable rows. required_env is empty — the key lives in the store, not the env, so
+    detect() is always True. build() intercepts custom: keys and uses the stored key."""
+    entries: list[ProviderEntry] = []
+    from hexharness.tui.config import load_custom_providers
+
+    for c in load_custom_providers():
+        name = c.get("name") or "custom"
+        entries.append(ProviderEntry(
+            key=f"custom:{_slug(name)}", label=f"{name} (custom)",
+            required_env=(), model_env="", model_default=c.get("model") or "",
+            module="hexharness.providers.openai_compatible", cls_name="OpenAICompatibleProvider",
+            kind="openai_compatible", base_url=c.get("base_url"),
+        ))
+    return entries
+
+
+def all_entries() -> list[ProviderEntry]:
+    return CATALOG + saved_custom_entries()
 
 
 def entry(key: str) -> ProviderEntry:
-    return _BY_KEY[key]
+    return next(e for e in all_entries() if e.key == key)
 
 
 def detect(e: ProviderEntry) -> bool:
@@ -90,6 +121,13 @@ def model_for(e: ProviderEntry) -> str:
 def build(e: ProviderEntry, *, model: str | None = None) -> LLMProvider:
     """Construct the provider lazily. The constructor reads its key/base_url from env and
     raises RuntimeError if a required key is missing — so build only on a selected entry."""
+    if e.key.startswith("custom:"):
+        # Saved bring-your-own gateway: key + base_url live in the secret store, not env.
+        c = _saved_custom(e.key.split(":", 1)[1])
+        if c is None:
+            raise RuntimeError(f"custom provider {e.key!r} not found in the saved store")
+        return build_custom(name=c.get("name") or "custom", base_url=c.get("base_url") or "",
+                            api_key=c.get("api_key") or "", model=model or c.get("model") or "")
     if e.kind == "openai_compatible":
         from hexharness.providers.openai_compatible import OpenAICompatibleProvider
 

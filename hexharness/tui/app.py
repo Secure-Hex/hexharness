@@ -412,10 +412,18 @@ class HexTUI(App):
         result = await self.push_screen_wait(ProviderScreen())
         if not result:
             return
-        self._selection = result
-        from hexharness.tui.config import save_selection
+        from hexharness.tui.config import save_custom_provider, save_selection
 
-        save_selection(result)  # persist for future sessions (without any api key)
+        if result.get("kind") == "custom":
+            # Freshly registered bring-your-own gateway: persist it (key included) to the
+            # secret store, then store a normal named selection so it reloads next session.
+            p = result["params"]
+            save_custom_provider({"name": p["name"], "base_url": p["base_url"],
+                                  "model": p["model"], "api_key": p["api_key"]})
+            result = {"kind": "provider", "keys": [f"custom:{providers._slug(p['name'])}"],
+                      "model": p["model"]}
+        self._selection = result
+        save_selection(result)  # persist for future sessions (never contains an api key)
         self.engine = None  # rebuild with the new provider on the next run
         self.loop = None
         self._sync_header()
