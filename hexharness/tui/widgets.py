@@ -49,9 +49,9 @@ class PromptArea(TextArea):
             event.stop()
             self.nav_fn(-1 if event.key == "up" else 1)
             return
-        if slash_active and event.key == "tab" and self.completer is not None:
+        if slash_active and event.key in ("tab", "enter") and self.completer is not None:
             match = self.completer()
-            if match:
+            if match:  # Enter/Tab complete the selection; a non-matching "/x" still submits
                 event.prevent_default()
                 event.stop()
                 self.text = f"/{match} "

@@ -115,7 +115,7 @@ class HexTUI(App):
         self._slash_sel %= len(items)
         shown = "  ".join((f"▶ /{n}" if i == self._slash_sel else f"/{n}")
                            for i, n in enumerate(items))
-        suggest.update(shown + "   ·  ↑/↓ select · Tab complete")
+        suggest.update(shown + "   ·  ↑/↓ select · Tab/Enter complete")
         suggest.display = True
 
     def _slash_nav(self, delta: int) -> None:

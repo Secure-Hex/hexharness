@@ -90,3 +90,19 @@ async def test_updown_selects_then_tab_completes():
         await pilot.press("tab")
         await pilot.pause()
         assert box.text == "/subdomain-enumeration "   # the SELECTED match, not the top
+
+
+async def test_enter_completes_selected_slash():
+    from hexharness.tui.app import HexTUI
+    from hexharness.tui.widgets import PromptArea as _PA
+
+    app = HexTUI()
+    async with app.run_test(size=(110, 30)) as pilot:
+        await pilot.pause()
+        box = app.query_one("#prompt", _PA)
+        box.focus()
+        box.text = "/sq"           # unique-ish match: sqli-triage
+        await pilot.pause()
+        await pilot.press("enter")  # completes instead of submitting
+        await pilot.pause()
+        assert box.text == "/sqli-triage "
