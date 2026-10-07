@@ -113,6 +113,8 @@ class HexTUI(App):
         self._saved_tokens = 0
         self._eng_name = ""              # engagement name = session key for persistence
         self._resume_conv = None         # conversation loaded from a saved session
+        self._queue: list[str] = []      # messages typed while a turn runs (drained in order)
+        self._running = False            # is a turn in flight?
 
     # --- layout ---
 
@@ -374,6 +376,11 @@ class HexTUI(App):
             return
         if used:
             self._log(f"using skill /{used}", _MUTED)
+        if self._running:
+            self._queue.append(prompt)  # a turn is in flight — queue this one
+            self._log(f"⏳ queued ({len(self._queue)}): {prompt}", _MUTED)
+            self._set_status(f"working… · {len(self._queue)} queued", _ACCENT)
+            return
         self._run(prompt)
 
     @work(group="scope")
@@ -409,8 +416,9 @@ class HexTUI(App):
 
     @work(exclusive=True)
     async def _run(self, prompt: str) -> None:
-        box = self.query_one("#prompt", PromptArea)
-        box.disabled = True
+        # Input stays enabled so the operator can type and QUEUE more messages while a
+        # turn runs; queued prompts drain one at a time when this turn finishes.
+        self._running = True
         self._log(f"❯ {prompt}", _ACCENT)
         self._live_buf = ""
         self._streamed = False
@@ -431,10 +439,15 @@ class HexTUI(App):
         except Exception as exc:  # noqa: BLE001 — surface, never crash the UI
             self._log(f"error: {exc}", _DANGER)
         finally:
-            box.disabled = False
-            box.focus()
-            self._set_status("ready — type a prompt", _MUTED)
+            self._running = False
             self._save_session()  # auto-save the conversation after each turn
+            self.query_one("#prompt", PromptArea).focus()
+            if self._queue:
+                nxt = self._queue.pop(0)
+                self._set_status(f"next queued… · {len(self._queue)} left", _ACCENT)
+                self._run(nxt)  # drain the next queued message
+            else:
+                self._set_status("ready — type a prompt", _MUTED)
 
     def _on_event(self, event: Event) -> None:
         """Bus subscriber — runs on the app loop, so writing widgets here is safe."""

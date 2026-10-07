@@ -47,14 +47,15 @@ def test_register_sets_env_for_process(monkeypatch):
 
 # --- app boot + provider screen (Pilot) ---
 
-async def test_app_mounts_core_widgets():
+async def test_app_mounts_core_widgets(tmp_path, monkeypatch):
+    monkeypatch.setenv("HEXHARNESS_CONFIG", str(tmp_path / "cfg.json"))  # no saved mode => default
     app = HexTUI()
     async with app.run_test() as pilot:
         assert app.query_one("#header", HexHeader)
         assert app.query_one("#transcript", RichLog)
         assert app.query_one("#prompt", PromptArea)
         assert app.query_one(Footer)
-        # header carries the brand + mode
+        # header carries the brand + the (default) mode
         header_text = str(app.query_one("#header", HexHeader).render())
         assert "HexHarness" in header_text
         assert "interactive/recon" in header_text
