@@ -27,6 +27,9 @@ class Phase(IntEnum):
     EXPLOITATION = 2
     POST_EXPLOITATION = 3
     REPORTING = 4
+    # No phase gate: every tool runs regardless of phase. ROE max_risk and the Scope
+    # Guard STILL apply — bypass lifts only the phase ceiling, not the hard gates.
+    BYPASS = 5
 
 
 # Each phase pins the max risk allowed while in it.
@@ -36,6 +39,7 @@ _PHASE_CEILING: dict[Phase, RiskLevel] = {
     Phase.EXPLOITATION: RiskLevel.INTRUSIVE,
     Phase.POST_EXPLOITATION: RiskLevel.DESTRUCTIVE,
     Phase.REPORTING: RiskLevel.PASSIVE,
+    Phase.BYPASS: RiskLevel.DESTRUCTIVE,
 }
 
 
