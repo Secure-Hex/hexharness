@@ -116,7 +116,7 @@ class HexTUI(App):
         self._eng_name = ""              # engagement name = session key for persistence
         self._resume_conv = None         # conversation loaded from a saved session
         self._queue: list[str] = []      # messages typed while a turn runs (drained in order)
-        self._running = False            # is a turn in flight?
+        self._turn_running = False            # is a turn in flight?
         self._run_worker = None          # handle to the current run worker (for cancel)
 
     # --- layout ---
@@ -152,7 +152,7 @@ class HexTUI(App):
             self.loop.conversation.pop()
         n = len(self._queue)
         self._queue.clear()
-        self._running = False
+        self._turn_running = False
         self._set_status("cancelled — ready", _WARNING)
         self._log(f"⨯ cancelled current turn" + (f" and {n} queued" if n else ""), _WARNING)
 
@@ -409,7 +409,7 @@ class HexTUI(App):
             return
         if used:
             self._log(f"using skill /{used}", _MUTED)
-        if self._running:
+        if self._turn_running:
             self._queue.append(prompt)  # a turn is in flight — queue this one
             self._log(f"⏳ queued ({len(self._queue)}): {prompt}", _MUTED)
             self._set_status(f"working… · {len(self._queue)} queued  (Ctrl+X cancel)", _ACCENT)
@@ -451,7 +451,7 @@ class HexTUI(App):
     async def _run(self, prompt: str) -> None:
         # Input stays enabled so the operator can type and QUEUE more messages while a
         # turn runs; queued prompts drain one at a time when this turn finishes.
-        self._running = True
+        self._turn_running = True
         self._log(f"❯ {prompt}", _ACCENT)
         self._live_buf = ""
         self._streamed = False
@@ -477,7 +477,7 @@ class HexTUI(App):
         except Exception as exc:  # noqa: BLE001 — surface, never crash the UI
             self._log(f"error: {exc}", _DANGER)
         finally:
-            self._running = False
+            self._turn_running = False
             self._save_session()  # auto-save the conversation after each turn
             self.query_one("#prompt", PromptArea).focus()
             if self._queue:

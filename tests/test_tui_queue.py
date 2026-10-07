@@ -14,7 +14,7 @@ async def test_submit_while_running_queues(tmp_path, monkeypatch):
     app = HexTUI()
     async with app.run_test(size=(100, 30)) as pilot:
         await pilot.pause()
-        app._running = True                     # pretend a turn is in flight
+        app._turn_running = True                     # pretend a turn is in flight
         box = app.query_one("#prompt", PromptArea)
         box.post_message(PromptArea.Submitted("queued one"))
         await pilot.pause()
@@ -37,10 +37,10 @@ async def test_cancel_aborts_and_clears_queue(tmp_path, monkeypatch):
         app._run_worker = SimpleNamespace(cancel=lambda: cancelled.__setitem__("n", 1))
         app.loop = SimpleNamespace(conversation=[Message.user_text("stuck question")])
         app._queue = ["one", "two"]
-        app._running = True
+        app._turn_running = True
 
         app.action_cancel()
         assert cancelled["n"] == 1          # the stuck worker was cancelled
         assert app._queue == []             # queue cleared
-        assert app._running is False        # recovered
+        assert app._turn_running is False        # recovered
         assert app.loop.conversation == []  # trailing unanswered user msg dropped
