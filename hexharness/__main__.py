@@ -120,14 +120,71 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--engagement", default=None)
 
     sub.add_parser("build-image", help="build the HexHarness sandbox image (Kali + tools)")
+
+    v = sub.add_parser("verify", help="verify a session's audit log (SHA-256 hash chain) for tampering")
+    v.add_argument("--engagement", default="engagements/example.engagement.yaml")
+
+    rp = sub.add_parser("report", help="render a client report from an engagement's confirmed findings")
+    rp.add_argument("--engagement", default="engagements/example.engagement.yaml")
+    rp.add_argument("--out", default=None, help="output path; extension picks the format (.html/.pdf/.docx/.md)")
+    rp.add_argument("--template", default=None, help="template path (defaults to the bundled HTML template)")
+    rp.add_argument("--no-generative", action="store_true", help="skip the LLM exec-summary/risk-narrative")
+    rp.add_argument("--model", default=None)
     return p
+
+
+def _verify(args) -> str:
+    from hexharness import session as sess
+    from hexharness.engagement import Engagement
+    from hexharness.events.store import EventStore, HashChainError
+
+    name = Engagement.load(args.engagement).name
+    db = sess.db_path(name)
+    if not db.exists():
+        return f"no session log for '{name}' at {db} — nothing to verify."
+    store = EventStore(str(db))
+    n = len(store.all())
+    try:
+        store.verify()
+    except HashChainError as exc:
+        return f"TAMPERED: audit log for '{name}' failed verification at — {exc} ({n} events)"
+    return f"OK: audit log for '{name}' is intact — {n} events, hash chain verified."
+
+
+async def _report(args) -> str:
+    from hexharness import session as sess
+    from hexharness.engagement import Engagement
+    from hexharness.evidence.store import EvidenceStore
+    from hexharness.events.store import EventStore
+    from hexharness.reporting.build import build_report
+
+    eng = Engagement.load(args.engagement)
+    db = sess.db_path(eng.name)
+    if not db.exists():
+        return f"no session for '{eng.name}' at {db} — run a task first so there are findings."
+    events = EventStore(str(db))
+    evidence = EvidenceStore(str(db), events=events)
+    provider = None
+    if not args.no_generative:
+        from hexharness.providers.anthropic import AnthropicProvider
+
+        provider = AnthropicProvider()
+    out = args.out or str(sess.session_dir(eng.name) / f"report-{eng.name}.html")
+    path = await build_report(eng, evidence, out, provider=provider,
+                              template=args.template, model_name=args.model)
+    return f"report written to {path} ({len(evidence.confirmed())} confirmed findings)."
 
 
 def main() -> int:
     argv = sys.argv[1:]
-    if argv and argv[0] not in ("run", "init", "tui", "build-image", "-h", "--help"):
+    _subcommands = ("run", "init", "tui", "build-image", "verify", "report", "-h", "--help")
+    if argv and argv[0] not in _subcommands:
         argv = ["run", *argv]  # back-compat: bare prompt => run
     args = _parser().parse_args(argv)
+
+    if args.cmd == "verify":
+        print(_verify(args))
+        return 0
 
     if args.cmd == "build-image":
         from hexharness.sandbox.image import DEFAULT_SANDBOX_IMAGE, build_image
@@ -142,7 +199,7 @@ def main() -> int:
         HexTUI(engagement=args.engagement).run()
         return 0
 
-    coro = _init(args) if args.cmd == "init" else _run(args)
+    coro = {"init": _init, "report": _report}.get(args.cmd, _run)(args)
     try:
         print(asyncio.run(coro))
         return 0

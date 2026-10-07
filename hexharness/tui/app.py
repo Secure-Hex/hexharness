@@ -66,6 +66,7 @@ class HexTUI(App):
         Binding("ctrl+o", "mode", "Mode", show=False),
         Binding("ctrl+e", "edit_scope", "Edit engagement", priority=True, show=False),  # TextArea also uses ctrl+e
         Binding("ctrl+r", "dictate", "Dictate", show=False),
+        Binding("ctrl+g", "report", "Report", show=False),
         Binding("ctrl+x", "cancel", "Cancel turn", priority=True, show=False),
         Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
         Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
@@ -83,6 +84,7 @@ class HexTUI(App):
         ("Ctrl+T", "Capabilities (tools, skills, secrets, web backend)"),
         ("Ctrl+F", "Findings (confirm / reject candidates)"),
         ("Ctrl+R", "Dictate (push-to-talk, local)"),
+        ("Ctrl+G", "Generate report (confirmed findings)"),
         ("Ctrl+K", "Kill switch"),
         ("Ctrl+L", "Clear transcript"),
         ("Ctrl+Q", "Quit"),
@@ -411,8 +413,18 @@ class HexTUI(App):
             import hexharness.skills as pkg
             from hexharness.skills.engine import SkillRegistry
 
-            lib = Path(pkg.__file__).parent / "library"
-            self._skills = SkillRegistry().discover(lib) if lib.is_dir() else SkillRegistry()
+            lib = Path(pkg.__file__).parent / "library"           # packaged
+            global_dir = Path.home() / ".hexharness" / "skills"   # every engagement
+            reg = SkillRegistry().discover(lib).discover(global_dir, replace=True)
+            if self.engagement_path is not None:                  # this engagement's skills
+                from hexharness.engagement import Engagement
+                from hexharness.session import session_dir
+                try:
+                    name = Engagement.load(self.engagement_path).name
+                    reg.discover(session_dir(name) / "skills", replace=True)
+                except Exception:  # noqa: BLE001 — bad/missing engagement file is not fatal here
+                    pass
+            self._skills = reg
         return self._skills
 
     @on(PromptArea.Changed, "#prompt")
@@ -746,6 +758,38 @@ class HexTUI(App):
             if self.loop is not None:
                 self.loop.ctx = self.engine.ctx  # live loop adopts the re-clamped context
             # SCOPE_CHANGED is logged by the existing _on_event handler.
+
+    @work(exclusive=True, group="report")
+    async def action_report(self) -> None:
+        """Render a client report from the engagement's confirmed findings into the
+        workspace. Uses the live provider for the exec-summary/risk-narrative prose."""
+        try:
+            self._ensure_engine()
+        except RuntimeError as exc:
+            self._log(f"cannot report yet: {exc}", _WARNING)
+            return
+        if self.engine is None:
+            self._log("no engagement yet — configure one first", _WARNING)
+            return
+        confirmed = len(self.engine.evidence.confirmed())
+        if confirmed == 0:
+            self._log("no confirmed findings yet — confirm candidates (Ctrl+F) first", _WARNING)
+            return
+        from hexharness.reporting.build import build_report
+        from hexharness.session import session_dir
+
+        out = session_dir(self.engine.engagement.name) / f"report-{self.engine.engagement.name}.html"
+        self._set_status("📝 generating report…", _ACCENT)
+        try:
+            provider = self._make_provider()
+            path = await build_report(self.engine.engagement, self.engine.evidence, out,
+                                      provider=provider, model_name=self._model_override())
+        except Exception as exc:  # noqa: BLE001 — missing optional dep, provider error, etc.
+            self._log(f"report failed: {exc}", _DANGER)
+            self._set_status("ready", _MUTED)
+            return
+        self._log(f"✓ report written to {path} ({confirmed} confirmed findings)", _SUCCESS)
+        self._set_status("ready", _MUTED)
 
     @work(exclusive=True, group="dictate")
     async def action_dictate(self) -> None:

@@ -24,7 +24,8 @@ from hexharness.tools.registry import ToolRegistry
 
 
 def default_registry(*, vault=None, secret_requester=None, workspace: str | Path | None = None,
-                     evidence=None, events=None, sandbox_image: str = "hexharness/kali:latest") -> ToolRegistry:
+                     evidence=None, events=None, sandbox_image: str = "hexharness/kali:latest",
+                     engagement=None) -> ToolRegistry:
     from pathlib import Path
 
     from hexharness.control.secrets import DenySecretRequester
@@ -69,6 +70,10 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
         from hexharness.tools.native.evidence_tools import RecordFindingTool
 
         reg.register(RecordFindingTool(evidence))  # agent logs findings as CANDIDATE
+        if engagement is not None:
+            from hexharness.tools.native.report_tools import GenerateReportTool
+
+            reg.register(GenerateReportTool(evidence, engagement, workspace))  # provider set in Engine.loop
     # Model may PROPOSE an engagement/scope; activation is a human action in the TUI.
     from hexharness.tools.native.engagement_tools import EngagementDraftTool
 
@@ -209,7 +214,7 @@ class Engine:
         workspace = Path(".hexharness") / slug / "workspace"
         reg = registry if registry is not None else default_registry(
             vault=vault, secret_requester=secret_requester, workspace=workspace,
-            evidence=evidence, events=events, sandbox_image=eng.sandbox_image,
+            evidence=evidence, events=events, sandbox_image=eng.sandbox_image, engagement=eng,
         )
         return cls(
             engagement=eng, events=events, evidence=evidence, control=control,
@@ -232,6 +237,9 @@ class Engine:
         exec_tool = self.registry.get("exec_command")
         if exec_tool is not None and hasattr(exec_tool, "image"):
             exec_tool.image = engagement.sandbox_image
+        report_tool = self.registry.get("generate_report")
+        if report_tool is not None and hasattr(report_tool, "engagement"):
+            report_tool.engagement = engagement  # report header follows the new scope
         self.ctx = ExecContext(
             engagement_id=engagement.name, subagent_id=self.ctx.subagent_id,
             mode=engagement.clamp(self.ctx.mode), now=self.ctx.now,  # re-clamp to the new ROE
@@ -253,6 +261,10 @@ class Engine:
 
     def loop(self, *, provider: LLMProvider, model: str | None = None,
              on_text=None, on_thinking=None) -> AgentLoop:
+        # Hand the live provider to the report tool so its generative sections can run.
+        report_tool = self.registry.get("generate_report")
+        if report_tool is not None and hasattr(report_tool, "provider"):
+            report_tool.provider = provider
         return AgentLoop(
             provider=provider, control=self.control, registry=self.registry,
             events=self.events, ctx=self.ctx, model=model, kill_switch=self.kill_switch,
