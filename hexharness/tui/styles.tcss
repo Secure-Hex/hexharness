@@ -385,3 +385,22 @@ ScopeEditScreen { align: center middle; }
     border-right: round $hh-accent;
     color: $hh-text;
 }
+
+/* model reasoning (dim) shown live above the answer */
+#thinking {
+    height: auto;
+    max-height: 8;
+    margin: 0 2;
+    padding: 0 1;
+    color: $hh-muted;
+    background: $hh-background;
+}
+
+/* status line: working / thinking / running tool / ready */
+#status {
+    height: 1;
+    margin: 0 2;
+    padding: 0 1;
+    color: $hh-muted;
+    background: $hh-panel;
+}

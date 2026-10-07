@@ -105,14 +105,17 @@ class HexTUI(App):
         self._dict_base = ""      # prompt text present when dictation started
         self._skills = None       # lazy SkillRegistry for /slash skill references
         self._slash_sel = 0       # selected index in the live slash suggestions
+        self._thinking_buf = ""   # accumulating model reasoning for the current turn
 
     # --- layout ---
 
     def compose(self) -> ComposeResult:
         yield HexHeader(id="header")
         yield RichLog(id="transcript", wrap=True, markup=False, highlight=False)
+        yield Static("", id="thinking")  # live model reasoning (dim) for the current turn
         yield Static("", id="live")  # live-streaming model text for the current turn
         yield Static("", id="slash-suggest")  # live skill suggestions while typing "/..."
+        yield Static("ready — type a prompt", id="status")  # working / thinking / waiting
         # multi-line, soft-wrapping, auto-growing prompt (Enter submits, Ctrl+J newline)
         yield PromptArea(id="prompt", soft_wrap=True)
         yield Static(self._commands_text(), id="command-panel")  # toggleable (Ctrl+B)
@@ -239,21 +242,33 @@ class HexTUI(App):
         )
         self.engine.events._bus.subscribe(self._on_event)
         self.loop = self.engine.loop(provider=provider, model=self._model_override(),
-                                     on_text=self._stream_text)
+                                     on_text=self._stream_text, on_thinking=self._stream_thinking)
         self._sync_header()
+
+    def _set_status(self, text: str, style: str = _MUTED) -> None:
+        self.query_one("#status", Static).update(Text(text, style=style))
 
     def _stream_text(self, delta: str) -> None:
         """Token sink (runs on the app loop). Grow the live line; it's flushed into the
         transcript permanently when the turn's MODEL_RESPONSE event arrives."""
         self._streamed = True
+        self._set_status("⣾ writing…", _ACCENT)
         self._live_buf += delta
         self.query_one("#live", Static).update(Text(self._live_buf, style=_TEXT))
+
+    def _stream_thinking(self, delta: str) -> None:
+        """Reasoning sink: show the model's thinking live, dimmed, above the answer."""
+        self._set_status("💭 thinking…", _WARNING)
+        self._thinking_buf += delta
+        self.query_one("#thinking", Static).update(Text("💭 " + self._thinking_buf, style=_MUTED))
 
     def _flush_live(self) -> None:
         if self._live_buf:
             self._log(self._live_buf, _TEXT)
             self._live_buf = ""
             self.query_one("#live", Static).update("")
+        self._thinking_buf = ""
+        self.query_one("#thinking", Static).update("")
 
     # --- running ---
 
@@ -342,6 +357,8 @@ class HexTUI(App):
         self._log(f"❯ {prompt}", _ACCENT)
         self._live_buf = ""
         self._streamed = False
+        self._thinking_buf = ""
+        self._set_status("⣾ working…", _ACCENT)
         try:
             self._ensure_engine()
             result = await self.loop.run(prompt)
@@ -359,6 +376,7 @@ class HexTUI(App):
         finally:
             box.disabled = False
             box.focus()
+            self._set_status("ready — type a prompt", _MUTED)
 
     def _on_event(self, event: Event) -> None:
         """Bus subscriber — runs on the app loop, so writing widgets here is safe."""
@@ -371,6 +389,7 @@ class HexTUI(App):
             self._log(f"{effect.upper():5} {p.get('tool')} ({p.get('risk')}){tgt} — "
                       f"{p.get('gate')}: {p.get('reason')}", style)
         elif t is EventType.TOOL_STARTED:
+            self._set_status(f"🔧 running {p.get('tool')}…", _ACCENT)
             self._log(f"→ {p.get('tool')} {p.get('input', {})}", _MUTED)
         elif t is EventType.TOOL_FINISHED:
             mark = "✓" if p.get("ok") else "✗"
