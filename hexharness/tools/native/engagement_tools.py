@@ -27,14 +27,20 @@ class EngagementDraftTool(Tool):
     # ponytail: writes are confined to out_dir with a slugged filename; the real human
     # gate is activation, not drafting, so no HITL here.
 
-    def __init__(self, out_dir: str | Path = "engagements"):
+    def __init__(self, out_dir: str | Path = "engagements", *, events=None):
         self.out_dir = Path(out_dir)
+        self.events = events  # when set, emit ENGAGEMENT_PROPOSED so the TUI can offer activation
 
     async def run(self, tool_input: dict) -> str:
         spec = EngagementSpec.model_validate(tool_input)
         yaml_text = render_yaml(spec)  # raises on invalid scope/ROE before writing
         path = write_engagement(spec, self.out_dir)
+        if self.events is not None:
+            from hexharness.events.types import EventType
+
+            # Propose only — activation is a human action in the TUI, never the model's.
+            await self.events.append(EventType.ENGAGEMENT_PROPOSED, {"path": str(path), "name": spec.name})
         return (
-            f"Draft written to {path} (NOT yet active — needs human confirmation).\n\n"
-            f"{yaml_text}"
+            f"Proposed engagement written to {path} (NOT active — the operator must approve "
+            f"it in the TUI before scope changes take effect).\n\n{yaml_text}"
         )

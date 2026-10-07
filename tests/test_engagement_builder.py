@@ -49,7 +49,7 @@ def test_unknown_enum_raises():
 async def test_draft_tool_writes_and_returns_yaml(tmp_path):
     tool = EngagementDraftTool(tmp_path)
     out = await tool.run(_spec().model_dump())
-    assert "NOT yet active" in out
+    assert "NOT active" in out
     files = list(tmp_path.glob("*.engagement.yaml"))
     assert len(files) == 1 and Engagement.load(files[0]).name == "acme test"
 

@@ -24,7 +24,7 @@ from hexharness.tools.registry import ToolRegistry
 
 
 def default_registry(*, vault=None, secret_requester=None, workspace: str | Path | None = None,
-                     evidence=None) -> ToolRegistry:
+                     evidence=None, events=None) -> ToolRegistry:
     from pathlib import Path
 
     from hexharness.control.secrets import DenySecretRequester
@@ -57,6 +57,10 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
         from hexharness.tools.native.evidence_tools import RecordFindingTool
 
         reg.register(RecordFindingTool(evidence))  # agent logs findings as CANDIDATE
+    # Model may PROPOSE an engagement/scope; activation is a human action in the TUI.
+    from hexharness.tools.native.engagement_tools import EngagementDraftTool
+
+    reg.register(EngagementDraftTool("engagements", events=events))
     # file / code I/O, workspace-confined (write gated: INTRUSIVE + approval)
     reg.register(FileReadTool(workspace))
     reg.register(FileWriteTool(workspace))
@@ -157,12 +161,36 @@ class Engine:
         slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in eng.name.lower())
         workspace = Path(".hexharness") / slug / "workspace"
         reg = registry if registry is not None else default_registry(
-            vault=vault, secret_requester=secret_requester, workspace=workspace, evidence=evidence,
+            vault=vault, secret_requester=secret_requester, workspace=workspace,
+            evidence=evidence, events=events,
         )
         return cls(
             engagement=eng, events=events, evidence=evidence, control=control,
             registry=reg, ctx=ctx, kill_switch=kill, vault=vault,
         )
+
+    async def apply_engagement(self, engagement: Engagement, *, approved_by: str) -> None:
+        """Swap the active scope/ROE to a new engagement at runtime. The ONLY sanctioned
+        way to change scope while running — invoked solely by an explicit human approval
+        (never by a tool/the model), and audited as SCOPE_CHANGED. Keeps the event log,
+        evidence, budget spend, and conversation; replaces scope_guard + ROE in place."""
+        self.engagement = engagement
+        self.control.scope_guard = engagement.scope_guard()
+        self.control.roe = engagement.roe_policy()
+        new_budget = engagement.budget_tracker()
+        new_budget.tokens_used = self.control.budget.tokens_used  # carry spend across the change
+        new_budget.usd_used = self.control.budget.usd_used
+        self.control.budget = new_budget
+        self.ctx = ExecContext(
+            engagement_id=engagement.name, subagent_id=self.ctx.subagent_id,
+            mode=engagement.clamp(self.ctx.mode), now=self.ctx.now,  # re-clamp to the new ROE
+        )
+        await self.events.append(EventType.SCOPE_CHANGED, {
+            "engagement": engagement.name, "approved_by": approved_by,
+            "scope": {"cidrs": list(engagement.scope.cidrs), "domains": list(engagement.scope.domains),
+                      "exclusions": list(engagement.scope.exclusions)},
+            "max_risk": engagement.roe.max_risk,
+        })
 
     def loop(self, *, provider: LLMProvider, model: str | None = None, on_text=None) -> AgentLoop:
         return AgentLoop(
