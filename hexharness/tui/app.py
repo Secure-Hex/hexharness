@@ -71,7 +71,8 @@ class HexTUI(App):
         Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
         Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
         Binding("ctrl+q", "quit", "Quit", show=False),
-        Binding("ctrl+c", "quit", "Quit", show=False),
+        # ctrl+c is left to Textual: it copies the current text selection (drag to select),
+        # falling back to quit when nothing is selected. Overriding it broke copy.
     ]
 
     # Shown in the Commands side panel (key, description). Includes prompt + slash commands
@@ -88,6 +89,7 @@ class HexTUI(App):
         ("Ctrl+K", "Kill switch"),
         ("Ctrl+L", "Clear transcript"),
         ("Ctrl+Q", "Quit"),
+        ("Select", "Drag to select text · Ctrl+C copies it (Shift+drag for terminal-native)"),
         ("Enter", "Run the prompt  ·  Ctrl+J: newline"),
         ("/name", "Invoke a skill  ·  /compact · /save · /: list"),
         ("Session", "Auto-saves each turn & on quit; resumes on reopening the engagement"),
@@ -227,10 +229,12 @@ class HexTUI(App):
         return names
 
     def action_quit(self) -> None:
+        self.exit()  # on_unmount persists + cleans up on EVERY exit path (incl. Textual ctrl+c)
+
+    def on_unmount(self) -> None:
         self._save_session()  # persist the conversation before exiting
         if self.engine is not None:
             self.engine.close_sandbox()  # remove the session container; /workspace persists
-        self.exit()
 
     def _render_suggest(self, items: list[str]) -> None:
         suggest = self.query_one("#slash-suggest", Static)
