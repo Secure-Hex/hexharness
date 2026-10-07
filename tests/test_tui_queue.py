@@ -23,3 +23,24 @@ async def test_submit_while_running_queues(tmp_path, monkeypatch):
         assert app._queue == ["queued one", "queued two"]
         # input stays usable (not disabled) so the operator can keep typing
         assert box.disabled is False
+
+
+async def test_cancel_aborts_and_clears_queue(tmp_path, monkeypatch):
+    monkeypatch.setenv("HEXHARNESS_CONFIG", str(tmp_path / "cfg.json"))
+    from types import SimpleNamespace
+    from hexharness.providers.types import Message
+
+    app = HexTUI()
+    async with app.run_test(size=(100, 30)) as pilot:
+        await pilot.pause()
+        cancelled = {"n": 0}
+        app._run_worker = SimpleNamespace(cancel=lambda: cancelled.__setitem__("n", 1))
+        app.loop = SimpleNamespace(conversation=[Message.user_text("stuck question")])
+        app._queue = ["one", "two"]
+        app._running = True
+
+        app.action_cancel()
+        assert cancelled["n"] == 1          # the stuck worker was cancelled
+        assert app._queue == []             # queue cleared
+        assert app._running is False        # recovered
+        assert app.loop.conversation == []  # trailing unanswered user msg dropped

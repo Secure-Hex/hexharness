@@ -180,7 +180,7 @@ class OpenAIProvider:
         key = api_key or os.environ.get("OPENAI_API_KEY")
         if not key:
             raise RuntimeError("OPENAI_API_KEY not set")
-        self._client = AsyncOpenAI(api_key=key)
+        self._client = AsyncOpenAI(api_key=key, timeout=90, max_retries=1)
         self.default_model = default_model or os.environ.get("HEXHARNESS_OPENAI_MODEL", "gpt-4o")
 
     async def complete(

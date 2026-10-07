@@ -65,6 +65,7 @@ class HexTUI(App):
         Binding("ctrl+o", "mode", "Mode", show=False),
         Binding("ctrl+e", "edit_scope", "Edit engagement", priority=True, show=False),  # TextArea also uses ctrl+e
         Binding("ctrl+r", "dictate", "Dictate", show=False),
+        Binding("ctrl+x", "cancel", "Cancel turn", priority=True, show=False),
         Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
         Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
         Binding("ctrl+q", "quit", "Quit", show=False),
@@ -115,6 +116,7 @@ class HexTUI(App):
         self._resume_conv = None         # conversation loaded from a saved session
         self._queue: list[str] = []      # messages typed while a turn runs (drained in order)
         self._running = False            # is a turn in flight?
+        self._run_worker = None          # handle to the current run worker (for cancel)
 
     # --- layout ---
 
@@ -137,6 +139,21 @@ class HexTUI(App):
     def action_commands(self) -> None:
         panel = self.query_one("#command-panel", Static)
         panel.display = not panel.display
+
+    def action_cancel(self) -> None:
+        """Abort a stuck/running turn and clear the queue so the operator can continue."""
+        if self._run_worker is not None:
+            self._run_worker.cancel()
+            self._run_worker = None
+        # Drop the trailing unanswered user message so the next turn isn't two user turns.
+        if self.loop is not None and self.loop.conversation and \
+                getattr(self.loop.conversation[-1].role, "value", "") == "user":
+            self.loop.conversation.pop()
+        n = len(self._queue)
+        self._queue.clear()
+        self._running = False
+        self._set_status("cancelled — ready", _WARNING)
+        self._log(f"⨯ cancelled current turn" + (f" and {n} queued" if n else ""), _WARNING)
 
     def on_mount(self) -> None:
         self._sync_header()
@@ -379,9 +396,9 @@ class HexTUI(App):
         if self._running:
             self._queue.append(prompt)  # a turn is in flight — queue this one
             self._log(f"⏳ queued ({len(self._queue)}): {prompt}", _MUTED)
-            self._set_status(f"working… · {len(self._queue)} queued", _ACCENT)
+            self._set_status(f"working… · {len(self._queue)} queued  (Ctrl+X cancel)", _ACCENT)
             return
-        self._run(prompt)
+        self._run_worker = self._run(prompt)
 
     @work(group="scope")
     async def _propose_scope(self, path: str | None) -> None:
@@ -445,7 +462,7 @@ class HexTUI(App):
             if self._queue:
                 nxt = self._queue.pop(0)
                 self._set_status(f"next queued… · {len(self._queue)} left", _ACCENT)
-                self._run(nxt)  # drain the next queued message
+                self._run_worker = self._run(nxt)  # drain the next queued message
             else:
                 self._set_status("ready — type a prompt", _MUTED)
 
