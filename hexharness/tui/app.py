@@ -529,6 +529,9 @@ class HexTUI(App):
             mark = "✓" if p.get("ok") else "✗"
             extra = "" if p.get("ok") else f" — {p.get('error', '')}"
             self._log(f"{mark} {p.get('tool')}{extra}", _MUTED)
+            out = (p.get("output") or "").rstrip()
+            if out:
+                self._log(out, _TEXT)
         elif t is EventType.MODEL_RESPONSE:
             self._flush_live()  # streamed text for this turn becomes a permanent line
             self._log(f"· model ({p.get('tokens', 0)} tok, {p.get('stop_reason')})", _MUTED)

@@ -184,7 +184,10 @@ class AgentLoop:
         await self.events.append(EventType.TOOL_STARTED, {"tool": tool.name, "input": tu.input})
         try:
             output = await tool.run(tu.input)
-            await self.events.append(EventType.TOOL_FINISHED, {"tool": tool.name, "ok": True})
+            # ponytail: truncate the copy stored in the event/shown in the TUI; the model
+            # still gets the full output via the ToolResultBlock below.
+            await self.events.append(EventType.TOOL_FINISHED,
+                                     {"tool": tool.name, "ok": True, "output": output[:2000]})
             return ToolResultBlock(tool_use_id=tu.id, content=output)
         except Exception as exc:  # noqa: BLE001
             await self.events.append(EventType.TOOL_FINISHED, {"tool": tool.name, "ok": False, "error": str(exc)})
