@@ -14,6 +14,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.widgets import Footer, RichLog, Static
 
+from hexharness.agent.context import ExecContext
 from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.engine import Engine
 from hexharness.events.types import Event, EventType
@@ -106,6 +107,8 @@ class HexTUI(App):
         self._skills = None       # lazy SkillRegistry for /slash skill references
         self._slash_sel = 0       # selected index in the live slash suggestions
         self._thinking_buf = ""   # accumulating model reasoning for the current turn
+        self._saved_conversation = None  # carried across a loop rebuild (provider change)
+        self._saved_tokens = 0
 
     # --- layout ---
 
@@ -233,16 +236,23 @@ class HexTUI(App):
         return build(e, model=self._selection.get("model") or None)
 
     def _ensure_engine(self) -> None:
-        if self.engine is not None:
-            return
-        provider = self._make_provider()  # may raise RuntimeError if a key is missing
-        self.engine = Engine.from_engagement(
-            self.engagement_path, provider=provider, requested_mode=self.mode,
-            approver=TUIApprover(self), secret_requester=TUISecretRequester(self),
-        )
-        self.engine.events._bus.subscribe(self._on_event)
-        self.loop = self.engine.loop(provider=provider, model=self._model_override(),
-                                     on_text=self._stream_text, on_thinking=self._stream_thinking)
+        # Idempotent: build the engine if missing, and (re)build the loop if missing,
+        # carrying any saved conversation across a provider change.
+        if self.engine is None:
+            provider = self._make_provider()  # may raise RuntimeError if a key is missing
+            self.engine = Engine.from_engagement(
+                self.engagement_path, provider=provider, requested_mode=self.mode,
+                approver=TUIApprover(self), secret_requester=TUISecretRequester(self),
+            )
+            self.engine.events._bus.subscribe(self._on_event)
+        if self.loop is None:
+            provider = self._make_provider()
+            self.loop = self.engine.loop(provider=provider, model=self._model_override(),
+                                         on_text=self._stream_text, on_thinking=self._stream_thinking)
+            if self._saved_conversation is not None:
+                self.loop.conversation = self._saved_conversation
+                self.loop.last_input_tokens = self._saved_tokens
+                self._saved_conversation = None
         self._sync_header()
 
     def _set_status(self, text: str, style: str = _MUTED) -> None:
@@ -443,7 +453,11 @@ class HexTUI(App):
                       "model": p["model"]}
         self._selection = result
         save_selection(result)  # persist for future sessions (never contains an api key)
-        self.engine = None  # rebuild with the new provider on the next run
+        # Keep the engine (events/evidence/scope) and the conversation; only the loop is
+        # rebuilt with the new provider on the next run, carrying the history over.
+        if self.loop is not None:
+            self._saved_conversation = self.loop.conversation
+            self._saved_tokens = self.loop.last_input_tokens
         self.loop = None
         self._sync_header()
         self._log(f"provider set: {self._provider_model()[0]}  (saved for next session)", _MUTED)
@@ -566,7 +580,15 @@ class HexTUI(App):
         self._reset_mode()
 
     def _reset_mode(self) -> None:
-        # Mode is baked into ExecContext at assembly, so drop the engine to apply it next run.
-        self.engine = None
-        self.loop = None
+        # Update the context mode IN PLACE (re-clamped by ROE) so the conversation, event
+        # log and evidence are preserved — rebuilding the engine would wipe them.
+        if self.engine is not None:
+            self.engine.ctx = ExecContext(
+                engagement_id=self.engine.ctx.engagement_id,
+                subagent_id=self.engine.ctx.subagent_id,
+                mode=self.engine.engagement.clamp(self.mode),
+                now=self.engine.ctx.now,
+            )
+            if self.loop is not None:
+                self.loop.ctx = self.engine.ctx
         self._sync_header()

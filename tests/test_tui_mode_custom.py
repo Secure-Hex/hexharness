@@ -15,25 +15,33 @@ from hexharness.tui.screens import CustomProviderModal, ModeScreen, ProviderScre
 
 # --- Task A: Mode menu ---
 
-async def test_ctrl_o_opens_mode_screen_sets_mode_and_clears_engine():
+async def test_ctrl_o_sets_mode_in_place_and_preserves_conversation():
+    from hexharness.engine import Engine
+    from hexharness.providers.types import Message
+
     app = HexTUI()
     async with app.run_test() as pilot:
-        app.engine = object()  # pretend a built engine exists; mode change must drop it
+        # a real running engine with some conversation history
+        app.engine = Engine.from_engagement("tests/data/sample.engagement.yaml", provider=None)
+        app.engine.events._bus.subscribe(app._on_event)
+        app.loop = app.engine.loop(provider=None)
+        app.loop.conversation = [Message.user_text("earlier"), Message.user_text("history")]
+
         await pilot.press("ctrl+o")
         await pilot.pause()
         await pilot.pause()
         assert isinstance(app.screen, ModeScreen)
-
-        # pick a different autonomy + phase than the defaults (interactive/recon)
         app.screen.query_one("#mode-autonomy", ListView).index = list(Autonomy).index(Autonomy.AUTO)
         app.screen.query_one("#mode-phase", ListView).index = list(Phase).index(Phase.EXPLOITATION)
         app.screen.action_submit()
         await pilot.pause()
         await pilot.pause()
 
-        assert app.mode.autonomy is Autonomy.AUTO
-        assert app.mode.phase is Phase.EXPLOITATION
-        assert app.engine is None  # rebuilt with the new mode on the next run
+        assert app.mode.autonomy is Autonomy.AUTO  # requested mode recorded
+        assert app.engine is not None              # NOT rebuilt — in place
+        assert len(app.loop.conversation) == 2     # conversation preserved
+        # ctx mode is the ROE-clamped effective mode (fixture caps autonomy at interactive)
+        assert app.loop.ctx is app.engine.ctx
 
 
 # --- Task B: provider screen lists the openai_compatible gateways ---
