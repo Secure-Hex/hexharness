@@ -376,12 +376,12 @@ ScopeEditScreen { align: center middle; }
 /* toggleable commands side panel (Ctrl+B) */
 #command-panel {
     display: none;
-    dock: right;
+    dock: left;
     width: 46;
     max-width: 60%;
     height: 100%;
     padding: 1 2;
     background: $hh-panel;
-    border-left: round $hh-accent;
+    border-right: round $hh-accent;
     color: $hh-text;
 }
