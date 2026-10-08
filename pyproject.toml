@@ -48,6 +48,7 @@ hexharness = [
     "sandbox/docker/*",
     "skills/library/**/*",
     "knowledge/data/**/*",
+    "knowledge/corpus/**/*",
     "reporting/templates/**/*",
 ]
 
