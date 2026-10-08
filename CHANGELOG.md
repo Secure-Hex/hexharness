@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v1.2.1 (2026-10-08)
+
+### Bug Fixes
+
+- **tui**: Model ignored live scope activation until restart
+  ([`17d1868`](https://github.com/Secure-Hex/hexharness/commit/17d18689b956909a84b4d5881d30d3fdb9b562b7))
+
+Approving a proposed engagement updated the control plane + system prompt correctly, but the carried
+  conversation still held the pre-approval 'empty scope' turns and out-of-scope denials, so the
+  model kept acting as if nothing was active (a restart worked only because the new engagement began
+  with a fresh conversation). Now activation appends an authoritative [SCOPE ACTIVATED] note to the
+  conversation so the model realigns and proceeds within the new scope.
+
+
 ## v1.2.0 (2026-10-08)
 
 ### Features

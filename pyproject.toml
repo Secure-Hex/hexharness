@@ -1,6 +1,6 @@
 [project]
 name = "hexharness"
-version = "1.2.0"
+version = "1.2.1"
 description = "Agentic pentesting harness with a hard domain control plane (scope, ROE, evidence, budget)."
 readme = "README.md"
 requires-python = ">=3.12"
