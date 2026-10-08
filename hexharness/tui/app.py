@@ -536,11 +536,27 @@ class HexTUI(App):
             return
         if self.engagement_path is None:
             self._activate_from_file(path)
+            self._note_scope_active(eng)
             self._log(f"engagement configured: {eng.name} — scope is now active", _SUCCESS)
             return
         await self.engine.apply_engagement(eng, approved_by="operator")
         if self.loop is not None:
             self.loop.ctx = self.engine.ctx  # live loop adopts the re-clamped context
+        self._note_scope_active(eng)
+
+    def _note_scope_active(self, eng) -> None:
+        """Append an authoritative note to the conversation so the model stops acting on the
+        stale 'no scope / denied' turns it saw before approval (the live control plane and
+        system prompt are already updated; this realigns the model's own context)."""
+        if self.loop is None:
+            return
+        from hexharness.providers.types import Message
+
+        targets = ", ".join(list(eng.scope.domains) + list(eng.scope.cidrs)) or "(none)"
+        self.loop.conversation.append(Message.user_text(
+            f"[SCOPE ACTIVATED] The operator approved engagement '{eng.name}'. It is now ACTIVE "
+            f"with in-scope targets: {targets}. Any earlier out-of-scope denials no longer apply — "
+            f"proceed within this scope and ROE."))
 
     @work(exclusive=True, group="compact")
     async def _compact(self) -> None:
