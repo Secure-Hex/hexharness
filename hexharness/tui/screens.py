@@ -762,7 +762,9 @@ class EngagementEditScreen(ModalScreen[dict]):
                         yield Input(placeholder=placeholder, id=f"add-{key}")
                         yield Button("Add", id=f"add-{key}-btn")
                 yield ListView(id="scope-entries")
-                yield Button("Remove selected", id="scope-remove-btn")
+                with Horizontal(classes="scope-add-row"):
+                    yield Button("Edit selected", id="scope-edit-btn")
+                    yield Button("Remove selected", id="scope-remove-btn")
 
                 yield Static("ROE ceiling (the hard cap — raise it to allow riskier tools)",
                              classes="cap-section")
@@ -836,6 +838,20 @@ class EngagementEditScreen(ModalScreen[dict]):
         self._scope[key].remove(value)
         await self._refresh()
 
+    async def _edit_selected(self) -> None:
+        """Load the selected entry back into its group's input (and drop it from the list),
+        so the operator edits the value and re-adds it. Edit = remove-to-input + Add."""
+        idx = self.query_one("#scope-entries", ListView).index
+        entries = self._entries()
+        if idx is None or not 0 <= idx < len(entries):
+            return
+        key, value = entries[idx]
+        self._scope[key].remove(value)
+        inp = self.query_one(f"#add-{key}", Input)
+        inp.value = value
+        inp.focus()
+        await self._refresh()
+
     # --- time windows (same async-safe add/remove-by-index pattern as scope) ---
 
     async def _refresh_windows(self) -> None:
@@ -907,6 +923,8 @@ class EngagementEditScreen(ModalScreen[dict]):
             self.dismiss(None)
         elif bid == "scope-remove-btn":
             await self._remove_selected()
+        elif bid == "scope-edit-btn":
+            await self._edit_selected()
         elif bid == "window-add-btn":
             await self._add_window()
         elif bid == "window-remove-btn":
