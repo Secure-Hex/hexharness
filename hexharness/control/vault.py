@@ -109,9 +109,10 @@ class Vault:
 
     def names(self) -> list[str]:
         """Names of secrets currently held — NEVER the values (safe to show in a UI)."""
-        import os as _os
-
-        env_names = [k for k in _os.environ if k.endswith("_API_KEY") or k.startswith(self._env_prefix)]
+        # Only surface likely-secret env vars: those ending in _API_KEY, or (when a prefix
+        # is configured) matching it. An empty prefix must NOT match the whole environment.
+        env_names = [k for k in os.environ if k.endswith("_API_KEY")
+                     or (self._env_prefix and k.startswith(self._env_prefix))]
         return sorted(set(self._store) | set(env_names))
 
     def redact(self, text: str) -> str:
