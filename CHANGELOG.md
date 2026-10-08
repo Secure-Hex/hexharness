@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v1.1.1 (2026-10-08)
+
+### Bug Fixes
+
+- Install hints show the PyPI command, not the source-only editable form
+  ([`984db0a`](https://github.com/Secure-Hex/hexharness/commit/984db0a1246ae3632b24f3e85c26c1f50c6add59))
+
+Messages said 'pip install -e .[extra]' which only works from a repo checkout; a pip-installed user
+  got a misleading hint. Now 'pip install -U hexharness[extra]' for voice/search/browser, and the
+  voice hint notes the PortAudio system lib.
+
+
 ## v1.1.0 (2026-10-08)
 
 ### Features
