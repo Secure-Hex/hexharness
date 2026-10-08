@@ -11,6 +11,8 @@ from pydantic import BaseModel, Field
 from hexharness.evidence.findings import Severity
 from hexharness.tools.base import RiskLevel, Tool
 
+_SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4}
+
 
 class RecordFindingInput(BaseModel):
     title: str = Field(description="Short finding title")
@@ -51,3 +53,55 @@ class RecordFindingTool(Tool):
         )
         return (f"Recorded CANDIDATE finding {f.id}: {f.title} [{severity.value}]. "
                 "Awaiting human curation before it can reach the report.")
+
+
+class ListFindingsInput(BaseModel):
+    status: str = Field(default="all",
+                        description="Filter: all | candidate | confirmed | rejected")
+    detail: bool = Field(default=False,
+                         description="Include description, reproduction and evidence per finding")
+
+
+class ListFindingsTool(Tool):
+    name = "list_findings"
+    description = (
+        "List the findings already recorded this engagement, with their status "
+        "(candidate/confirmed/rejected), severity and target. Use it to see what you have "
+        "before recording duplicates or generating a report. Set detail=true for the full "
+        "description, reproduction and evidence of each."
+    )
+    input_model = ListFindingsInput
+    risk_level = RiskLevel.PASSIVE
+    scope_sensitive = False
+    requires_approval = False
+
+    def __init__(self, evidence_store):
+        self.evidence = evidence_store
+
+    async def run(self, tool_input: dict) -> str:
+        data = ListFindingsInput.model_validate(tool_input)
+        status = data.status.lower()
+        buckets = {"candidate": self.evidence.candidates, "confirmed": self.evidence.confirmed,
+                   "rejected": self.evidence.rejected}
+        if status in buckets:
+            findings = buckets[status]()
+        elif status == "all":
+            findings = [f for get in buckets.values() for f in get()]
+        else:
+            return f"unknown status '{data.status}' — use all|candidate|confirmed|rejected"
+        if not findings:
+            return f"No {status if status != 'all' else ''} findings recorded yet.".replace("  ", " ")
+        findings.sort(key=lambda f: (_SEVERITY_RANK.get(f.severity.value, 9), f.status.value))
+        lines = [f"{len(findings)} finding(s):"]
+        for f in findings:
+            tgt = f" @ {f.target}" if f.target else ""
+            cwe = f" {f.cwe}" if f.cwe else ""
+            lines.append(f"  [{f.status.value}] {f.id} — {f.title} ({f.severity.value}{cwe}){tgt}")
+            if data.detail:
+                if f.description:
+                    lines.append(f"      desc: {f.description}")
+                if f.reproduction:
+                    lines.append(f"      repro: {f.reproduction}")
+                if f.evidence:
+                    lines.append(f"      evidence: {', '.join(f.evidence)}")
+        return "\n".join(lines)

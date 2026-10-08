@@ -70,9 +70,10 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     # OSINT web search (ACTIVE, not scope-sensitive): free ddgs default, paid keys via vault
     reg.register(WebSearchTool(vault))
     if evidence is not None:
-        from hexharness.tools.native.evidence_tools import RecordFindingTool
+        from hexharness.tools.native.evidence_tools import ListFindingsTool, RecordFindingTool
 
         reg.register(RecordFindingTool(evidence))  # agent logs findings as CANDIDATE
+        reg.register(ListFindingsTool(evidence))   # agent reads back what it already has
         if engagement is not None:
             from hexharness.tools.native.report_tools import GenerateReportTool
 
