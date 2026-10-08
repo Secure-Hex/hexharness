@@ -1,6 +1,28 @@
 # CHANGELOG
 
 
+## v1.0.1 (2026-10-08)
+
+### Bug Fixes
+
+- **tui**: Ship styles.tcss in the wheel
+  ([`d1826ef`](https://github.com/Secure-Hex/hexharness/commit/d1826eff08817836106fe931bfd0c0d8c3bf77e9))
+
+The Textual stylesheet (hexharness/tui/styles.tcss) was not in package-data, so 'hexharness tui'
+  crashed on a pip-installed copy with StylesheetError: unable to read CSS file .../tui/styles.tcss.
+  Added tui/*.tcss to package-data.
+
+### Continuous Integration
+
+- Fix vault-persist tests on clean runner
+  ([`2c7a7f2`](https://github.com/Secure-Hex/hexharness/commit/2c7a7f2347ff54f4472eaa1782eb6e70d20775ef))
+
+The encrypted-vault tests need cryptography (the [secrets] extra), which CI's [dev] install lacked,
+  so they failed on the runner. CI now installs .[dev,secrets] (exercising the encrypted path), and
+  the three crypto-dependent tests skip gracefully when cryptography is absent (via the project's
+  own _get_fernet check).
+
+
 ## v1.0.0 (2026-10-08)
 
 ### Bug Fixes
