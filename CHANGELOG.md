@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v1.2.0 (2026-10-08)
+
+### Features
+
+- **tui**: Edit scope entries in the engagement editor
+  ([`6f84fb6`](https://github.com/Secure-Hex/hexharness/commit/6f84fb6f02fc3826ad72dc744902523c607814d1))
+
+The scope list only had Add/Remove. Added 'Edit selected': it loads the highlighted
+  domain/CIDR/exclusion back into its group's input and drops it from the list, so the operator
+  fixes the value and re-adds it — no delete-and-retype.
+
+
 ## v1.1.1 (2026-10-08)
 
 ### Bug Fixes
