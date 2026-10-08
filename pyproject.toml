@@ -48,9 +48,9 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/securehex/hexharness"
-Repository = "https://github.com/securehex/hexharness"
-Issues = "https://github.com/securehex/hexharness/issues"
+Homepage = "https://github.com/Secure-Hex/hexharness"
+Repository = "https://github.com/Secure-Hex/hexharness"
+Issues = "https://github.com/Secure-Hex/hexharness/issues"
 
 [project.scripts]
 hexharness = "hexharness.__main__:main"
