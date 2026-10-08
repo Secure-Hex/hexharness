@@ -1,6 +1,6 @@
 [project]
 name = "hexharness"
-version = "0.1.0"
+version = "1.0.0"
 description = "Agentic pentesting harness with a hard domain control plane (scope, ROE, evidence, budget)."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -76,3 +76,19 @@ testpaths = ["tests"]
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+# Automated versioning from Conventional Commits (python-semantic-release).
+# feat: -> minor, fix:/perf: -> patch, "BREAKING CHANGE"/! -> major.
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+build_command = "pip install build && python -m build"
+commit_message = "chore(release): v{version} [skip ci]"
+tag_format = "v{version}"
+major_on_zero = true
+allow_zero_version = false
+
+[tool.semantic_release.branches.main]
+match = "main"
+
+[tool.semantic_release.changelog]
+exclude_commit_patterns = ["^chore\\(release\\):"]

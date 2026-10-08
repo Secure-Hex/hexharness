@@ -1,0 +1,46 @@
+name: release
+
+# Bump the version from Conventional Commits, tag, create a GitHub Release, and publish
+# to PyPI. Runs on every push to main (except semantic-release's own [skip ci] commit).
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # push the version commit + tag, create the Release
+      id-token: write         # PyPI Trusted Publishing (OIDC, no API token needed)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # semantic-release needs full history to read commits/tags
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Decide + apply the next version, update pyproject, commit, tag, build dist/.
+      - name: Python Semantic Release
+        id: release
+        uses: python-semantic-release/python-semantic-release@v9
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Publish the built artifacts to PyPI only when a new version was released.
+      - name: Publish to PyPI
+        if: steps.release.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      # Attach the built artifacts to the GitHub Release.
+      - name: Upload to GitHub Release
+        if: steps.release.outputs.released == 'true'
+        uses: python-semantic-release/publish-action@v9
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ steps.release.outputs.tag }}
