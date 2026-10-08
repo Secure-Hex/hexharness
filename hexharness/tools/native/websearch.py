@@ -94,7 +94,7 @@ class WebSearchTool(Tool):
         try:
             results = await asyncio.to_thread(fn, data.query, data.max_results)
         except ImportError:
-            return "web_search: install the free backend with  pip install -e '.[search]'"
+            return "web_search: install the free backend with  pip install -U 'hexharness[search]'"
         except Exception as exc:  # noqa: BLE001 — surface the failure to the agent, don't crash
             return f"web_search error ({backend}): {exc}"
         if not results:
