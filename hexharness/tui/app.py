@@ -71,6 +71,7 @@ class HexTUI(App):
         Binding("ctrl+e", "edit_scope", "Edit engagement", priority=True, show=False),  # TextArea also uses ctrl+e
         Binding("ctrl+r", "dictate", "Dictate", show=False),
         Binding("ctrl+g", "report", "Report", show=False),
+        Binding("ctrl+u", "update", "Update", show=False),
         Binding("ctrl+x", "cancel", "Cancel turn", priority=True, show=False),
         Binding("f2", "cycle_autonomy", "Autonomy", show=False),  # fallback for ctrl+o
         Binding("f3", "cycle_phase", "Phase", show=False),        # fallback for ctrl+o
@@ -90,6 +91,7 @@ class HexTUI(App):
         ("Ctrl+F", "Findings (confirm / reject candidates)"),
         ("Ctrl+R", "Dictate (push-to-talk, local)"),
         ("Ctrl+G", "Generate report (confirmed findings)"),
+        ("Ctrl+U", "Update HexHarness (when a newer PyPI version exists)"),
         ("Ctrl+K", "Kill switch"),
         ("Ctrl+L", "Clear transcript"),
         ("Ctrl+Q", "Quit"),
@@ -128,6 +130,7 @@ class HexTUI(App):
         self._queue: list[str] = []      # messages typed while a turn runs (drained in order)
         self._turn_running = False            # is a turn in flight?
         self._run_worker = None          # handle to the current run worker (for cancel)
+        self._update_latest = None       # newer PyPI version, if the update check found one
 
     # --- layout ---
 
@@ -174,6 +177,37 @@ class HexTUI(App):
         prompt.focus()
         self._log("HexHarness ready. Ctrl+P to pick a provider, then type a task.", _MUTED)
         self._announce_saved_session()
+        self._check_update()
+
+    @work(thread=True)
+    def _check_update(self) -> None:
+        """Background PyPI version check; offer an upgrade without blocking startup."""
+        from hexharness.update import check_update
+
+        found = check_update()
+        if found:
+            cur, latest = found
+            self._update_latest = latest
+            self.call_from_thread(
+                self._log,
+                f"⬆ hexharness {latest} available (you have {cur}) — press Ctrl+U to update, "
+                "or keep working on this version.", _ACCENT)
+
+    @work(exclusive=True, group="update")
+    async def action_update(self) -> None:
+        if not getattr(self, "_update_latest", None):
+            self._log("already up to date (or update check hasn't run).", _MUTED)
+            return
+        from hexharness.update import upgrade
+
+        self._set_status("⬆ updating via pip…", _ACCENT)
+        ok, out = await asyncio.to_thread(upgrade)
+        if ok:
+            self._log(f"✓ updated to hexharness {self._update_latest} — restart HexHarness to use it.", _SUCCESS)
+            self._update_latest = None
+        else:
+            self._log(f"update failed:\n{out}", _DANGER)
+        self._set_status("ready", _MUTED)
 
     def _announce_saved_session(self) -> None:
         """At launch, tell the operator if a saved session will resume (it loads lazily

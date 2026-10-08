@@ -175,12 +175,29 @@ async def _report(args) -> str:
     return f"report written to {path} ({len(evidence.confirmed())} confirmed findings)."
 
 
+def _notify_update() -> None:
+    """One-line stderr notice if a newer HexHarness is on PyPI. Never blocks fatally."""
+    try:
+        from hexharness.update import check_update
+
+        found = check_update()
+        if found:
+            cur, latest = found
+            print(f"⬆ hexharness {latest} is available (you have {cur}). "
+                  f"Update: pip install -U hexharness", file=sys.stderr)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main() -> int:
     argv = sys.argv[1:]
     _subcommands = ("run", "init", "tui", "build-image", "verify", "report", "-h", "--help")
     if argv and argv[0] not in _subcommands:
         argv = ["run", *argv]  # back-compat: bare prompt => run
     args = _parser().parse_args(argv)
+
+    if args.cmd != "tui":        # the TUI shows its own in-app update notice
+        _notify_update()
 
     if args.cmd == "verify":
         print(_verify(args))
