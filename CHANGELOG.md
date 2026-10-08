@@ -1,6 +1,20 @@
 # CHANGELOG
 
 
+## v1.1.0 (2026-10-08)
+
+### Features
+
+- Check PyPI for updates and offer to upgrade
+  ([`a7307aa`](https://github.com/Secure-Hex/hexharness/commit/a7307aa33579f3c81475e6a524b0c4b73a9e3571))
+
+On startup HexHarness compares the installed version against the latest on PyPI. CLI prints a
+  one-line notice; the TUI shows it and binds Ctrl+U to run 'pip install -U hexharness' then prompt
+  for a restart. The operator can always keep the current version — the check is best-effort, fails
+  safe offline, and is disabled by HEXHARNESS_NO_UPDATE_CHECK=1. Numeric version compare (1.10 >
+  1.9).
+
+
 ## v1.0.1 (2026-10-08)
 
 ### Bug Fixes
