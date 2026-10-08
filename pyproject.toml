@@ -2,7 +2,19 @@
 name = "hexharness"
 version = "0.1.0"
 description = "Agentic pentesting harness with a hard domain control plane (scope, ROE, evidence, budget)."
+readme = "README.md"
 requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Matias Tillerias", email = "matias.tillerias@securehex.cl" }]
+keywords = ["pentesting", "security", "agent", "llm", "offensive-security", "control-plane", "mitre-attack"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "Topic :: Security",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: POSIX :: Linux",
+]
 dependencies = [
     "pydantic>=2.6",
     "anthropic>=0.40",
@@ -34,6 +46,11 @@ all = [
     "textual>=0.60", "sounddevice>=0.4", "faster-whisper>=1.0", "numpy>=1.26", "ddgs>=6.0",
     "cryptography>=42",
 ]
+
+[project.urls]
+Homepage = "https://github.com/securehex/hexharness"
+Repository = "https://github.com/securehex/hexharness"
+Issues = "https://github.com/securehex/hexharness/issues"
 
 [project.scripts]
 hexharness = "hexharness.__main__:main"

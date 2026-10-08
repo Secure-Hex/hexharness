@@ -19,3 +19,7 @@ __pycache__/
 
 # per-engagement tool workspace (file/exec tools)
 .hexharness/
+
+dist/
+build/
+*.egg-info/
