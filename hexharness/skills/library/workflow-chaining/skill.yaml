@@ -1,0 +1,6 @@
+name: workflow-chaining
+description: How to use the run_workflow tool to chain tools into one pipeline (templating, for_each, conditions).
+version: 0.1.0
+phase: recon
+tags: [workflow, automation, chaining, pipeline]
+risk_hint: active

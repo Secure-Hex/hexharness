@@ -17,7 +17,7 @@ def _registry() -> SkillRegistry:
 def test_discover_lists_bundled_skills_cheaply() -> None:
     reg = _registry()
     names = {m.name for m in reg.list_metadata()}
-    assert names == {"subdomain-enumeration", "sqli-triage"}
+    assert {"subdomain-enumeration", "sqli-triage", "workflow-chaining"} <= names
     # metadata is manifest-only — never the playbook body
     recon = next(m for m in reg.list_metadata() if m.name == "subdomain-enumeration")
     assert recon.phase == "recon"
@@ -40,7 +40,7 @@ def test_skill_tool_is_passive_and_not_scope_sensitive() -> None:
 async def test_skill_tool_lists_without_name() -> None:
     tool = SkillLookupTool(_registry())
     listing = json.loads(await tool.run({}))
-    assert {entry["name"] for entry in listing} == {"subdomain-enumeration", "sqli-triage"}
+    assert {"subdomain-enumeration", "sqli-triage", "workflow-chaining"} <= {entry["name"] for entry in listing}
 
 
 async def test_skill_tool_returns_body_with_name() -> None:

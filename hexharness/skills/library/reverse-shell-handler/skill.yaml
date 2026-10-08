@@ -1,0 +1,6 @@
+name: reverse-shell-handler
+description: Catch and drive a reverse shell — listener_start, shell_sessions, shell_exec, listener_stop lifecycle.
+version: 0.1.0
+phase: exploit
+tags: [c2, reverse-shell, post-exploitation, listener]
+risk_hint: destructive
