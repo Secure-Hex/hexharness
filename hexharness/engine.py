@@ -48,6 +48,9 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     from hexharness.tools.native.osint import CloudStorageEnumTool, GithubDorkTool, WaybackUrlsTool
     from hexharness.tools.native.parallel import ParallelScanTool
     from hexharness.tools.native.exploit import ExploitRunTool, MsfvenomTool
+    from hexharness.tools.native.revshell import (
+        ListenerStartTool, ListenerStopTool, ReverseShellManager, ShellExecTool, ShellSessionsTool,
+    )
 
     reg = ToolRegistry()
     executor = SandboxExecutor()
@@ -123,6 +126,13 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     # exploitation, sandboxed (DESTRUCTIVE + approval; exploit_run also scope-checked)
     reg.register(MsfvenomTool(executor, image=sandbox_image, workspace=str(workspace)))
     reg.register(ExploitRunTool(executor, image=sandbox_image, workspace=str(workspace)))
+    # reverse-shell handler (DESTRUCTIVE + approval; caught peers scope-checked on connect)
+    shell_mgr = ReverseShellManager(
+        scope_check=engagement.scope_guard().in_scope if engagement is not None else None)
+    reg.register(ListenerStartTool(shell_mgr))
+    reg.register(ShellSessionsTool(shell_mgr))
+    reg.register(ShellExecTool(shell_mgr))
+    reg.register(ListenerStopTool(shell_mgr))
     # binary / reversing static analysis, workspace-confined (ACTIVE, host subprocess)
     reg.register(BinaryInfoTool(workspace))
     reg.register(ChecksecTool(workspace))
@@ -275,12 +285,17 @@ class Engine:
         })
 
     def close_sandbox(self) -> None:
-        """Remove the session's long-lived exec_command container (sync; safe to call on
-        exit). Only the host-mounted workspace persists afterwards."""
+        """Tear down per-session resources (sync; safe to call on exit): the long-lived
+        exec_command container AND any reverse-shell listeners/sessions. Only the
+        host-mounted workspace persists afterwards."""
         tool = self.registry.get("exec_command")
         executor = getattr(tool, "executor", None)
         if executor is not None and hasattr(executor, "close_session"):
             executor.close_session()
+        shell = self.registry.get("listener_start")
+        manager = getattr(shell, "manager", None)
+        if manager is not None and hasattr(manager, "close"):
+            manager.close()
 
     def loop(self, *, provider: LLMProvider, model: str | None = None,
              on_text=None, on_thinking=None) -> AgentLoop:
