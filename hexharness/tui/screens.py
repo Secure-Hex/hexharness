@@ -9,7 +9,9 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, ListItem, ListView, Select, SelectionList, Static
+from textual.widgets import (
+    Button, Checkbox, Input, Label, ListItem, ListView, Select, SelectionList, Static,
+)
 
 from hexharness.control.policy import Autonomy, Mode, Phase
 from hexharness.tui.providers import ProviderEntry, all_entries, detect, model_for, register
@@ -793,6 +795,10 @@ class EngagementEditScreen(ModalScreen[dict]):
                 yield Label("  exec_command Docker image")
                 yield Input(value=self._data.get("sandbox_image", "kalilinux/kali-rolling"),
                             placeholder="e.g. kalilinux/kali-rolling", id="eng-sandbox")
+                yield Checkbox("Hardware access — pass host USB/UART + WiFi into the sandbox "
+                               "(privileged + host net; DROPS isolation)",
+                               value=bool(self._data.get("hardware_access", False)),
+                               id="eng-hardware")
             with Horizontal(id="scope-edit-buttons"):
                 yield Button("Apply", variant="primary", id="scope-apply-btn")
                 yield Button("Cancel", id="scope-edit-cancel-btn")
@@ -879,6 +885,7 @@ class EngagementEditScreen(ModalScreen[dict]):
         }
         data["report_template"] = self.query_one("#eng-report", Input).value.strip()
         data["sandbox_image"] = self.query_one("#eng-sandbox", Input).value.strip() or "kalilinux/kali-rolling"
+        data["hardware_access"] = self.query_one("#eng-hardware", Checkbox).value
         self.dismiss(data)
 
     # --- interaction (one dispatcher keeps the per-button @on handlers from double-firing) ---
