@@ -4,10 +4,18 @@ from __future__ import annotations
 
 import stat
 
+import pytest
+
 import hexharness.control.vault as vault_mod
 from hexharness.control.vault import Vault
 
+# Encrypted persistence needs cryptography (the [secrets] extra). Skip those tests when it
+# is absent, checked via the project's own loader so there is no import-hook ambiguity.
+requires_crypto = pytest.mark.skipif(
+    vault_mod._get_fernet() is None, reason="needs cryptography (install the [secrets] extra)")
 
+
+@requires_crypto
 def test_roundtrip_across_instances(tmp_path):
     p = tmp_path / "vault.enc"
     v1 = Vault(persist_path=p)
@@ -20,12 +28,14 @@ def test_roundtrip_across_instances(tmp_path):
     assert "SHODAN_API_KEY" in v2.names() and "sk-topsecret" not in v2.names()
 
 
+@requires_crypto
 def test_at_rest_is_not_plaintext(tmp_path):
     p = tmp_path / "vault.enc"
     Vault(persist_path=p).set("SHODAN_API_KEY", "sk-topsecret")
     assert b"sk-topsecret" not in p.read_bytes()
 
 
+@requires_crypto
 def test_key_file_is_0600(tmp_path):
     p = tmp_path / "vault.enc"
     Vault(persist_path=p).set("K", "v")

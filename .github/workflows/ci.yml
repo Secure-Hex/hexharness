@@ -13,8 +13,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install (core + dev)
-        run: pip install -e '.[dev]'
+      - name: Install (core + dev + secrets)
+        run: pip install -e '.[dev,secrets]'   # secrets => cryptography, so the encrypted-vault path is tested
       - name: Run tests
         run: pytest -q
         env:
