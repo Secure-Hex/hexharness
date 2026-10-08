@@ -67,6 +67,7 @@ hexharness = [
     "knowledge/data/**/*",
     "knowledge/corpus/**/*",
     "reporting/templates/**/*",
+    "tui/*.tcss",
 ]
 
 [tool.pytest.ini_options]
