@@ -85,7 +85,8 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(FileReadTool(workspace))
     reg.register(FileWriteTool(workspace))
     # command execution, sandboxed (DESTRUCTIVE + approval)
-    reg.register(ExecCommandTool(executor, image=sandbox_image, workspace=str(workspace)))
+    reg.register(ExecCommandTool(executor, image=sandbox_image, workspace=str(workspace),
+                                 hardware=bool(getattr(engagement, "hardware_access", False))))
     # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
     reg.register(SkillInstallTool(skills, library, global_dir=global_skills, project_dir=project_skills))
     reg.register(McpConnectTool(reg, vault, secret_requester))
@@ -253,6 +254,7 @@ class Engine:
         exec_tool = self.registry.get("exec_command")
         if exec_tool is not None and hasattr(exec_tool, "image"):
             exec_tool.image = engagement.sandbox_image
+            exec_tool.hardware = bool(getattr(engagement, "hardware_access", False))
         report_tool = self.registry.get("generate_report")
         if report_tool is not None and hasattr(report_tool, "engagement"):
             report_tool.engagement = engagement  # report header follows the new scope

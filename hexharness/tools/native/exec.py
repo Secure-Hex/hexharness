@@ -29,10 +29,11 @@ class ExecCommandTool(Tool):
     requires_approval = True
 
     def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "hexharness/kali:latest",
-                 workspace: str | None = None):
+                 workspace: str | None = None, hardware: bool = False):
         self.executor = executor or SandboxExecutor()
         self.image = image
         self.workspace = workspace  # mounted at /workspace; files persist on the host
+        self.hardware = hardware    # pass host USB + wireless into the container (opt-in)
 
     async def run(self, tool_input: dict) -> str:
         argv = tool_input["argv"]
@@ -44,6 +45,7 @@ class ExecCommandTool(Tool):
                 argv,
                 timeout=tool_input.get("timeout", 60),
                 workspace=self.workspace,
+                hardware=self.hardware,
             )
         except SandboxError as e:
             return f"sandbox unavailable: {e}"

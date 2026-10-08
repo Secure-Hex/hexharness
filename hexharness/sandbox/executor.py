@@ -47,7 +47,8 @@ class SandboxExecutor:
         base = Path(workspace).parent.name if workspace else "default"
         return f"hexharness-{base}"
 
-    async def _ensure_session(self, image: str, workspace: str | Path | None) -> str:
+    async def _ensure_session(self, image: str, workspace: str | Path | None,
+                              hardware: bool = False) -> str:
         if not self.available():
             raise SandboxError("docker not found on PATH")
         if self._session_container is not None:
@@ -76,9 +77,18 @@ class SandboxExecutor:
             except OSError:
                 pass
             mount = ["-v", f"{ws}:/workspace", "-w", "/workspace"]
-        # Default caps + bridge so apt-get/dpkg and any command work; `sleep infinity`
-        # keeps it alive so we can exec into it until close_session().
-        cmd = [self.docker_bin, "run", "-d", "--name", name, "--network", "bridge",
+        # Hardware mode: pass host USB devices + wireless NICs into the container so
+        # USB-UART gadgets and WiFi monitor-mode (aircrack) work. This needs host net
+        # (wireless ifaces live in the host netns), the USB bus, and privileged (monitor
+        # mode / rfkill / raw device ioctls). It DROPS the sandbox isolation — opt-in only.
+        if hardware:
+            net = ["--network", "host"]
+            hw = ["--privileged", "-v", "/dev/bus/usb:/dev/bus/usb", "-v", "/dev:/dev"]
+        else:
+            net = ["--network", "bridge"]
+            hw = []
+        # `sleep infinity` keeps it alive so we can exec into it until close_session().
+        cmd = [self.docker_bin, "run", "-d", "--name", name, *net, *hw,
                *mount, "--memory", "2g", "--pids-limit", "512", image, "sleep", "infinity"]
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
@@ -92,8 +102,9 @@ class SandboxExecutor:
 
     async def exec_in_session(self, image: str, argv: list[str], *,
                               timeout: float | None = None,
-                              workspace: str | Path | None = None) -> SandboxResult:
-        name = await self._ensure_session(image, workspace)
+                              workspace: str | Path | None = None,
+                              hardware: bool = False) -> SandboxResult:
+        name = await self._ensure_session(image, workspace, hardware)
         cmd = [self.docker_bin, "exec", "-w", "/workspace", name, *argv]
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)

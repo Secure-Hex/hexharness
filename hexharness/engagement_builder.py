@@ -48,6 +48,7 @@ class EngagementSpec(BaseModel):
     budget: BudgetSpec = Field(default_factory=BudgetSpec)
     report_template: str = "default.html.j2"
     sandbox_image: str = "hexharness/kali:latest"
+    hardware_access: bool = False  # pass host USB + wireless into the sandbox (opt-in)
 
 
 def validate_spec(spec: EngagementSpec) -> Engagement:

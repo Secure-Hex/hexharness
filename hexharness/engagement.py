@@ -50,6 +50,10 @@ class Engagement(BaseModel):
     budget: _BudgetModel = Field(default_factory=_BudgetModel)
     report_template: str = "default.html.j2"
     sandbox_image: str = "hexharness/kali:latest"  # Docker image exec_command runs inside
+    # Hardware mode for exec_command: passes host USB devices + wireless NICs into the
+    # session container (USB-UART, WiFi monitor mode, etc.). Trades sandbox isolation
+    # (adds --privileged --net=host) for hardware access, so it's OFF by default.
+    hardware_access: bool = False
 
     @classmethod
     def load(cls, path: str | Path) -> "Engagement":
