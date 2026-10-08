@@ -563,7 +563,16 @@ class HexTUI(App):
         if self.loop is None:
             self._log("nothing to compact yet — run a task first", _MUTED)
             return
-        collapsed = await self.loop.compact(reason="manual")
+        try:
+            # Compaction calls the provider; a timeout/network error must never crash
+            # the UI — log it and leave the transcript untouched.
+            collapsed = await asyncio.wait_for(self.loop.compact(reason="manual"), timeout=120)
+        except asyncio.TimeoutError:
+            self._log("compaction timed out — provider unreachable? transcript unchanged", _DANGER)
+            return
+        except Exception as exc:  # noqa: BLE001 — surface, never crash the UI
+            self._log(f"compaction failed: {exc} — transcript unchanged", _DANGER)
+            return
         self._log(f"compacted {collapsed} messages into a summary" if collapsed
                   else "nothing to compact", _MUTED)
         self._sync_header()
