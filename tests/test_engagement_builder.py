@@ -65,3 +65,16 @@ async def test_bootstrap_can_draft_but_not_scan():
         SpyTool("dns", RiskLevel.ACTIVE), {},
     )
     assert d.effect.value == "deny"
+
+
+def test_spec_accepts_nested_json_strings() -> None:
+    # Some models serialize scope/roe as JSON strings instead of dicts — must still validate.
+    from hexharness.engagement_builder import EngagementSpec
+
+    spec = EngagementSpec.model_validate({
+        "name": "x", "client": "c",
+        "scope": '{"cidrs": [], "domains": ["a.test"], "exclusions": []}',
+        "roe": '{"max_risk": "intrusive", "max_autonomy": "bypass", "max_phase": "exploitation"}',
+    })
+    assert spec.scope.domains == ["a.test"]
+    assert spec.roe.max_risk == "intrusive"

@@ -10,10 +10,24 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import json
+
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from hexharness.engagement import Engagement
+
+
+def _coerce_json(v):
+    """Some models serialize a nested object as a JSON STRING instead of a dict/list.
+    Parse it so `scope`/`roe`/`budget`/`windows` validate either way; leave non-JSON
+    strings untouched so normal validation still raises a clear error."""
+    if isinstance(v, str):
+        try:
+            return json.loads(v)
+        except (json.JSONDecodeError, ValueError):
+            return v
+    return v
 
 
 class ScopeSpec(BaseModel):
@@ -33,6 +47,8 @@ class RoeSpec(BaseModel):
     max_phase: str = "enumeration"
     windows: list[WindowSpec] = Field(default_factory=list)
 
+    _parse_windows = field_validator("windows", mode="before")(_coerce_json)
+
 
 class BudgetSpec(BaseModel):
     max_tokens: int | None = None
@@ -49,6 +65,9 @@ class EngagementSpec(BaseModel):
     report_template: str = "default.html.j2"
     sandbox_image: str = "hexharness/kali:latest"
     hardware_access: bool = False  # pass host USB + wireless into the sandbox (opt-in)
+
+    # Tolerate models that pass a nested object as a JSON string (see _coerce_json).
+    _parse_nested = field_validator("scope", "roe", "budget", mode="before")(_coerce_json)
 
 
 def validate_spec(spec: EngagementSpec) -> Engagement:
