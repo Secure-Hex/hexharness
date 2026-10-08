@@ -1,11 +1,12 @@
 name: pjud-verificadoc-consultunicod
-client: ''
+client: Poder Judicial de Chile
 scope:
   cidrs: []
-  domains: []
+  domains:
+  - verificadoc.pjud.cl
   exclusions: []
 roe:
-  max_risk: destructive
+  max_risk: intrusive
   max_autonomy: bypass
   max_phase: bypass
   windows: []

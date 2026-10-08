@@ -47,8 +47,16 @@ class FileReadTool(_WorkspaceConfined, Tool):
     async def run(self, tool_input: dict) -> str:
         target = self._resolve_in_workspace(tool_input["path"])
         max_bytes = tool_input.get("max_bytes", 200_000)
-        data = target.read_bytes()[:max_bytes]
-        return data.decode(errors="replace")
+        raw = target.read_bytes()
+        # Don't dump binary (images, ELF, archives): a NUL byte or lots of non-text bytes
+        # would spray control characters and corrupt the terminal. Summarize instead.
+        sample = raw[:4096]
+        nontext = sum(b < 9 or (13 < b < 32) for b in sample)
+        if b"\x00" in sample or (sample and nontext / len(sample) > 0.15):
+            return (f"{tool_input['path']}: binary file ({len(raw)} bytes) — not dumping. "
+                    "Use exec_command (e.g. `file`, `xxd`, `strings`) for binaries, or the "
+                    "browser/screenshot tools for images.")
+        return raw[:max_bytes].decode(errors="replace")
 
 
 class FileWriteInput(BaseModel):

@@ -7,6 +7,7 @@ subscriber streams colored control-plane events into the transcript live.
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 
 from rich.markdown import Markdown
@@ -35,6 +36,9 @@ from hexharness.tui.screens import (
 )
 
 DEFAULT_ENGAGEMENT = "engagements/example.engagement.yaml"
+
+# Terminal control characters to scrub from any logged text (keep \t \n \r).
+_CTRL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 # Mirrors styles.tcss so transcript lines match the theme.
 _ACCENT = "#d9894f"
@@ -300,6 +304,9 @@ class HexTUI(App):
     # --- transcript ---
 
     def _log(self, text: str, style: str = _TEXT) -> None:
+        # Strip terminal control characters (keep \t \n \r) so a tool that returns raw
+        # binary (e.g. file_read on an image) can never corrupt the terminal.
+        text = _CTRL_CHARS.sub("�", text)
         self.query_one("#transcript", RichLog).write(Text(text, style=style))
 
     def _log_markdown(self, text: str) -> None:
