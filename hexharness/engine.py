@@ -91,6 +91,10 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
     reg.register(SkillInstallTool(skills, library, global_dir=global_skills, project_dir=project_skills))
     reg.register(McpConnectTool(reg, vault, secret_requester))
+    # declarative multi-step pipeline; each step still routed through the control plane
+    from hexharness.tools.native.workflow_tool import RunWorkflowTool
+
+    reg.register(RunWorkflowTool())  # step_runner injected in Engine.loop()
     # API testing via Postman collections (list passive; run intrusive + scope-checked)
     reg.register(PostmanListTool())
     reg.register(PostmanRunTool())
@@ -284,8 +288,20 @@ class Engine:
         report_tool = self.registry.get("generate_report")
         if report_tool is not None and hasattr(report_tool, "provider"):
             report_tool.provider = provider
-        return AgentLoop(
+        agent_loop = AgentLoop(
             provider=provider, control=self.control, registry=self.registry,
             events=self.events, ctx=self.ctx, model=model, kill_switch=self.kill_switch,
             on_text=on_text, on_thinking=on_thinking,
         )
+        # Wire run_workflow's step runner to the loop's authorize+execute path, so every
+        # workflow step passes the SAME control-plane chokepoint as a direct tool call.
+        wf_tool = self.registry.get("run_workflow")
+        if wf_tool is not None and hasattr(wf_tool, "step_runner"):
+            from hexharness.providers.types import ToolUseBlock
+
+            async def _run_step(name: str, inp: dict) -> tuple[bool, str]:
+                rb = await agent_loop._handle_tool_use(ToolUseBlock(id="workflow", name=name, input=inp))
+                return (not rb.is_error, rb.content)
+
+            wf_tool.step_runner = _run_step
+        return agent_loop
