@@ -45,6 +45,9 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     )
     from hexharness.tools.native.shodan import ShodanHostTool
     from hexharness.tools.native.websearch import WebSearchTool
+    from hexharness.tools.native.osint import CloudStorageEnumTool, GithubDorkTool, WaybackUrlsTool
+    from hexharness.tools.native.parallel import ParallelScanTool
+    from hexharness.tools.native.exploit import ExploitRunTool, MsfvenomTool
 
     reg = ToolRegistry()
     executor = SandboxExecutor()
@@ -103,6 +106,17 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(WhoisLookupTool())        # native WHOIS over TCP/43, no sandbox
     reg.register(SmbEnumTool(executor, image=sandbox_image))
     reg.register(ShodanHostTool(vault))  # needs SHODAN_API_KEY → demos the out-of-band secret flow
+    # OSINT (passive/active, third-party sources — not the in-scope host directly)
+    reg.register(WaybackUrlsTool())
+    reg.register(GithubDorkTool(vault))        # needs GITHUB_TOKEN → out-of-band secret flow
+    reg.register(CloudStorageEnumTool())
+    # parallel multi-host scan (INTRUSIVE + approval; scope enforced INTERNALLY, fail-closed)
+    if engagement is not None:
+        reg.register(ParallelScanTool(executor, scope_check=engagement.scope_guard().in_scope,
+                                      image=sandbox_image))
+    # exploitation, sandboxed (DESTRUCTIVE + approval; exploit_run also scope-checked)
+    reg.register(MsfvenomTool(executor, image=sandbox_image, workspace=str(workspace)))
+    reg.register(ExploitRunTool(executor, image=sandbox_image, workspace=str(workspace)))
     # binary / reversing static analysis, workspace-confined (ACTIVE, host subprocess)
     reg.register(BinaryInfoTool(workspace))
     reg.register(ChecksecTool(workspace))
@@ -188,7 +202,10 @@ class Engine:
     ) -> "Engine":
         from hexharness.control.vault import Vault
 
-        vault = vault or Vault()
+        # Per-engagement slug drives the workspace AND the encrypted vault location, so
+        # secrets pasted once persist (encrypted) under this engagement and don't bleed across.
+        slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in eng.name.lower())
+        vault = vault or Vault(persist_path=Path(".hexharness") / slug / "vault.enc")
         bus = EventBus()
         # Tracing is a projection of the event stream: attach BEFORE the first append.
         # No-op if opentelemetry isn't installed; a broken tracer can't break the stream.
@@ -210,7 +227,6 @@ class Engine:
 
         kill = KillSwitch(trigger_file=kill_trigger_file, checkpoint=_checkpoint)
         # Per-engagement workspace so file/exec tools are isolated per engagement.
-        slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in eng.name.lower())
         workspace = Path(".hexharness") / slug / "workspace"
         reg = registry if registry is not None else default_registry(
             vault=vault, secret_requester=secret_requester, workspace=workspace,

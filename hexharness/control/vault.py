@@ -7,24 +7,92 @@ events or the LLM context. Backed by env today; the upgrade path is Varlock-mana
 """
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 
 
 class SecretNotFound(KeyError):
     pass
 
 
+def _get_fernet():
+    """Return cryptography's Fernet class, or None if it isn't installed.
+    Isolated so tests can monkeypatch it to simulate a crypto-less install."""
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError:
+        return None
+    return Fernet
+
+
 class Vault:
-    def __init__(self, *, env_prefix: str = ""):
+    def __init__(self, *, env_prefix: str = "", persist_path: str | os.PathLike | None = None):
         self._env_prefix = env_prefix
         self._known: set[str] = set()
-        self._store: dict[str, str] = {}  # in-process secrets set at runtime (never on disk)
+        self._store: dict[str, str] = {}  # in-process secrets set at runtime
+        # Optional encrypted-at-rest persistence. Key lives beside the store file.
+        self._persist_path = Path(persist_path).expanduser() if persist_path else None
+        self._key_path = self._persist_path.with_name("vault.key") if self._persist_path else None
+        if self._persist_path:
+            self._load()
+
+    # --- encrypted persistence (no-op unless a path is set AND cryptography is present) ---
+
+    def persistence_available(self) -> bool:
+        """True when secrets set() will actually survive the process. A UI can show this."""
+        return self._persist_path is not None and _get_fernet() is not None
+
+    def _fernet(self):
+        """Load (or generate) the 0600 key and return a Fernet, or None if crypto is absent."""
+        Fernet = _get_fernet()
+        if Fernet is None or self._key_path is None:
+            return None  # ponytail: no crypto -> caller must NOT write plaintext
+        self._key_path.parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(self._key_path.parent, 0o700)  # dir needs exec to traverse; 0700 not 0600
+        if self._key_path.exists():
+            key = self._key_path.read_bytes()
+        else:
+            key = Fernet.generate_key()
+            self._write_0600(self._key_path, key)
+        return Fernet(key)
+
+    def _load(self) -> None:
+        f = self._fernet()
+        if f is None or not self._persist_path.exists():
+            return
+        try:
+            data = json.loads(f.decrypt(self._persist_path.read_bytes()))
+        except Exception:
+            return  # ponytail: corrupt/old-key file -> start empty, keep running
+        self._store.update(data)
+        self._known.update(data.values())  # loaded values are redactable like set() ones
+
+    def _save(self) -> None:
+        f = self._fernet()
+        if f is None:
+            return  # fail safe: never write secret values unencrypted
+        token = f.encrypt(json.dumps(self._store).encode())
+        self._write_0600(self._persist_path, token)
+
+    @staticmethod
+    def _write_0600(path: Path, data: bytes) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        os.chmod(path, 0o600)  # tighten even if the file pre-existed with looser perms
+
+    # --- API (unchanged surface) ---
 
     def set(self, name: str, value: str) -> None:
         """Store a secret handed over out-of-band (e.g. an operator pastes an API key).
-        Lives in-process only. ponytail: add an OS-keyring backend to persist across runs."""
+        Persisted encrypted-at-rest if a persist_path was given and cryptography is installed,
+        otherwise in-process only."""
         self._store[name] = value
         self._known.add(value)
+        if self._persist_path:
+            self._save()
 
     def get(self, name: str) -> str:
         if name in self._store:
