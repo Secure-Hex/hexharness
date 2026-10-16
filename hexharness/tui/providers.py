@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib
 import os
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from hexharness.providers.base import LLMProvider
@@ -30,6 +31,9 @@ class ProviderEntry:
     # pointed at a fixed base_url (OpenRouter, Groq, ...).
     kind: str = "native"
     base_url: str | None = None  # fixed endpoint for openai_compatible entries
+    # Override for detect(): True when configured. Used by providers whose credentials
+    # live outside the environment (e.g. OAuth tokens on disk) instead of in env vars.
+    detect_fn: Callable[[], bool] | None = None
 
 
 # ponytail: one flat list is the whole registry; no plugin loader until a 5th provider
@@ -41,6 +45,15 @@ CATALOG: list[ProviderEntry] = [
     ProviderEntry("openai", "OpenAI", ("OPENAI_API_KEY",),
                   "HEXHARNESS_OPENAI_MODEL", "gpt-4o",
                   "hexharness.providers.openai", "OpenAIProvider", cost=(2.5, 10.0)),
+    # ChatGPT subscription via Codex OAuth tokens (~/.codex/auth.json). No API key / env;
+    # configured when the operator is logged into Codex. $0 marginal cost (subscription).
+    ProviderEntry("openai-oauth", "OpenAI (ChatGPT login)", (),
+                  "HEXHARNESS_OPENAI_OAUTH_MODEL", "gpt-5.6-sol",
+                  "hexharness.providers.openai_oauth", "OpenAIOAuthProvider",
+                  cost=(0.0, 0.0),
+                  detect_fn=lambda: __import__(
+                      "hexharness.providers.openai_oauth", fromlist=["is_logged_in"]
+                  ).is_logged_in()),
     ProviderEntry("google", "Google", ("GOOGLE_API_KEY",),
                   "HEXHARNESS_GOOGLE_MODEL", "gemini-2.0-flash",
                   "hexharness.providers.google", "GoogleProvider", cost=(0.1, 0.4)),
@@ -109,8 +122,12 @@ def entry(key: str) -> ProviderEntry:
 
 
 def detect(e: ProviderEntry) -> bool:
-    """True when every required env var is present. Ollama requires none (local endpoint
-    has a default base_url), so it always detects as configured."""
+    """True when the entry is configured. A detect_fn overrides the default (used by
+    providers whose credentials live on disk, not in env); otherwise every required env
+    var must be present. Ollama requires none (local default base_url), so it always
+    detects as configured."""
+    if e.detect_fn is not None:
+        return e.detect_fn()
     return all(os.environ.get(k) for k in e.required_env)
 
 
