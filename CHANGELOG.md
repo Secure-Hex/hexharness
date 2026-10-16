@@ -1,6 +1,31 @@
 # CHANGELOG
 
 
+## v1.3.0 (2026-10-16)
+
+### Bug Fixes
+
+- **tui**: Provider timeout during manual compaction crashed the UI
+  ([`fff4c86`](https://github.com/Secure-Hex/hexharness/commit/fff4c866daa09f9e69f85908112df10738f14306))
+
+### Features
+
+- **providers**: Add OpenAI provider via ChatGPT-subscription OAuth
+  ([`6efd97a`](https://github.com/Secure-Hex/hexharness/commit/6efd97acbb193fa06e90d5557a7ba7e08c374f07))
+
+Authenticate against the ChatGPT backend using the Codex CLI's OAuth tokens (~/.codex/auth.json)
+  instead of an API key, so a ChatGPT Plus/Pro subscription can be used in place of per-token API
+  billing. Reuses the existing Responses API mapping helpers; only auth, base_url, headers and
+  payload shape differ.
+
+- openai_oauth.py: load and proactively refresh Codex tokens, send the access token as bearer with
+  ChatGPT-Account-ID + originator headers against chatgpt.com/backend-api/codex. Always streams
+  (SSE-only backend), store=false, include reasoning.encrypted_content, system injected as the first
+  input item, no max_output_tokens. - providers catalog: new "openai-oauth" entry plus
+  ProviderEntry.detect_fn so a provider configured by on-disk credentials (Codex login) detects
+  without env. - tests: ChatGPT request shape, in-place token refresh, login detection.
+
+
 ## v1.2.1 (2026-10-08)
 
 ### Bug Fixes
