@@ -63,6 +63,7 @@ class EngagementSpec(BaseModel):
     roe: RoeSpec = Field(default_factory=RoeSpec)
     budget: BudgetSpec = Field(default_factory=BudgetSpec)
     report_template: str = "default.html.j2"
+    max_iterations: int = Field(default=12, ge=1)  # max tool-call rounds per turn
     sandbox_image: str = "hexharness/kali:latest"
     hardware_access: bool = False  # pass host USB + wireless into the sandbox (opt-in)
 

@@ -85,7 +85,7 @@ class HexTUI(App):
     COMMANDS = [
         ("Ctrl+B", "Toggle this commands panel"),
         ("Ctrl+P", "Pick / register a provider"),
-        ("Ctrl+E", "Edit engagement (name, scope, ROE, windows, budget, report)"),
+        ("Ctrl+E", "Edit engagement (name, scope, ROE, windows, budget, limits, report)"),
         ("Ctrl+O", "Set mode (autonomy / phase)"),
         ("Ctrl+T", "Capabilities (tools, skills, secrets, web backend)"),
         ("Ctrl+F", "Findings (confirm / reject candidates)"),

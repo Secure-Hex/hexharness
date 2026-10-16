@@ -128,6 +128,10 @@ class AgentLoop:
             f"Current mode: {self.ctx.mode.autonomy.name.lower()}/{self.ctx.mode.phase.name.lower()}. "
             "Act only within this scope and ROE; do not attempt targets or risk levels beyond them."
         )
+        lines.append(
+            f"You have at most {self.max_iterations} tool-call rounds this turn; plan "
+            "accordingly and summarize progress before you run out."
+        )
         return "\n".join(lines)
 
     async def run(self, user_prompt: str) -> str:

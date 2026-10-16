@@ -789,6 +789,11 @@ class EngagementEditScreen(ModalScreen[dict]):
                 yield Label("  max_seconds")
                 yield Input(value=self._as_str(b["max_seconds"]), placeholder="unlimited", id="bud-seconds")
 
+                yield Static("Limits", classes="cap-section")
+                yield Label("  max tool-call rounds per turn")
+                yield Input(value=self._as_str(self._data.get("max_iterations", 12)),
+                            placeholder="12", id="eng-max-iter")
+
                 yield Static("Report", classes="cap-section")
                 yield Input(value=self._data["report_template"], placeholder="report template",
                             id="eng-report")
@@ -899,6 +904,8 @@ class EngagementEditScreen(ModalScreen[dict]):
             "max_usd": self._budget_val("#bud-usd"),
             "max_seconds": self._budget_val("#bud-seconds"),
         }
+        # empty -> fall back to the default; pydantic coerces "20" -> 20 and raises on junk.
+        data["max_iterations"] = self.query_one("#eng-max-iter", Input).value.strip() or 12
         data["report_template"] = self.query_one("#eng-report", Input).value.strip()
         data["sandbox_image"] = self.query_one("#eng-sandbox", Input).value.strip() or "kalilinux/kali-rolling"
         data["hardware_access"] = self.query_one("#eng-hardware", Checkbox).value

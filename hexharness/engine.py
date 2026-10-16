@@ -307,6 +307,7 @@ class Engine:
             provider=provider, control=self.control, registry=self.registry,
             events=self.events, ctx=self.ctx, model=model, kill_switch=self.kill_switch,
             on_text=on_text, on_thinking=on_thinking,
+            max_iterations=self.engagement.max_iterations,
         )
         # Wire run_workflow's step runner to the loop's authorize+execute path, so every
         # workflow step passes the SAME control-plane chokepoint as a direct tool call.

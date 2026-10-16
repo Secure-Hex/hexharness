@@ -49,6 +49,9 @@ class Engagement(BaseModel):
     roe: _RoeModel = Field(default_factory=_RoeModel)
     budget: _BudgetModel = Field(default_factory=_BudgetModel)
     report_template: str = "default.html.j2"
+    # Max tool-call rounds the agent loop runs per turn before it stops with
+    # "[max iterations reached]". Raise it for long autonomous runs.
+    max_iterations: int = Field(default=12, ge=1)
     sandbox_image: str = "hexharness/kali:latest"  # Docker image exec_command runs inside
     # Hardware mode for exec_command: passes host USB devices + wireless NICs into the
     # session container (USB-UART, WiFi monitor mode, etc.). Trades sandbox isolation
