@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v1.4.0 (2026-10-16)
+
+### Features
+
+- **providers**: Map OpenAI Responses API (shared by OAuth + API-key providers)
+  ([`5ebc7b5`](https://github.com/Secure-Hex/hexharness/commit/5ebc7b5b0414da7c066092286665a84754944132))
+
+Add the Responses API mapping helpers (to_responses_input, tools_to_responses,
+  from_responses_response, stream_responses) and switch OpenAIProvider onto the Responses API. The
+  OAuth ChatGPT provider added in the previous commit imports these; without them the package fails
+  to import (TUI crash on the provider screen). Commit the dependency so main builds.
+
+
 ## v1.3.0 (2026-10-16)
 
 ### Bug Fixes
