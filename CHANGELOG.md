@@ -1,6 +1,18 @@
 # CHANGELOG
 
 
+## v1.5.0 (2026-10-16)
+
+### Features
+
+- **engagement**: Make max tool-call rounds per turn configurable
+  ([`6d626fc`](https://github.com/Secure-Hex/hexharness/commit/6d626fcaf8f877aacf4e87d52f6a4f51ef88fbcf))
+
+Add a max_iterations field to the engagement (default 12, minimum 1), settable from the engagement
+  YAML and the TUI engagement editor (new "Limits" section). The engine threads it into the agent
+  loop, and the per-turn system prompt now states the real cap instead of a hardcoded 12.
+
+
 ## v1.4.0 (2026-10-16)
 
 ### Features
