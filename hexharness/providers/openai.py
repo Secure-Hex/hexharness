@@ -1,4 +1,7 @@
-"""OpenAI adapter: normalized types <-> Chat Completions API.
+"""OpenAI adapter: normalized types <-> Chat Completions / Responses APIs.
+
+OpenAIProvider uses the Responses API; the Chat Completions helpers below are shared
+by the OpenAI-compatible and Ollama providers.
 
 API key from env OPENAI_API_KEY. default_model from HEXHARNESS_OPENAI_MODEL or "gpt-4o".
 Streams when an on_text sink is given (see stream_openai); otherwise one blocking call.
@@ -170,7 +173,88 @@ async def stream_openai(client, kwargs: dict[str, Any], on_text, on_thinking=Non
     )
 
 
+def to_responses_input(messages: list[Message]) -> list[dict[str, Any]]:
+    """Flatten normalized messages to Responses API input items (system goes in
+    `instructions`). Tool calls/results are top-level items, not message parts."""
+    out: list[dict[str, Any]] = []
+    for m in messages:
+        text = "".join(b.text for b in m.content if isinstance(b, TextBlock))
+        if text:
+            out.append({"role": m.role.value, "content": text})
+        for b in m.content:
+            if isinstance(b, ToolUseBlock):
+                out.append({"type": "function_call", "call_id": b.id, "name": b.name,
+                            "arguments": json.dumps(b.input)})
+            elif isinstance(b, ToolResultBlock):
+                out.append({"type": "function_call_output", "call_id": b.tool_use_id,
+                            "output": f"ERROR: {b.content}" if b.is_error else b.content})
+    return out
+
+
+def tools_to_responses(tools: list[ToolSpec]) -> list[dict[str, Any]]:
+    return [
+        {"type": "function", "name": t.name, "description": t.description, "parameters": t.input_schema}
+        for t in tools
+    ]
+
+
+def from_responses_response(resp, on_thinking=None) -> ModelResponse:
+    """Map a Responses API `Response`. Reasoning summaries go to on_thinking (blocking
+    path only; the streaming path pushes them live) and are not kept in history."""
+    content: list = []
+    for item in resp.output or []:
+        if item.type == "message":
+            text = "".join(p.text for p in item.content if getattr(p, "type", "") == "output_text")
+            if text:
+                content.append(TextBlock(text=text))
+        elif item.type == "function_call":
+            try:
+                args = json.loads(item.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            content.append(ToolUseBlock(id=item.call_id, name=item.name, input=args))
+        elif item.type == "reasoning" and on_thinking is not None:
+            for s in getattr(item, "summary", None) or []:
+                on_thinking(s.text)
+    if any(isinstance(b, ToolUseBlock) for b in content):
+        stop = StopReason.TOOL_USE
+    elif resp.status == "incomplete" and getattr(resp.incomplete_details, "reason", None) == "max_output_tokens":
+        stop = StopReason.MAX_TOKENS
+    else:
+        stop = StopReason.END_TURN
+    usage = getattr(resp, "usage", None)
+    return ModelResponse(
+        content=content,
+        stop_reason=stop,
+        usage=Usage(
+            input_tokens=getattr(usage, "input_tokens", 0) if usage else 0,
+            output_tokens=getattr(usage, "output_tokens", 0) if usage else 0,
+        ),
+        model=getattr(resp, "model", ""),
+    )
+
+
+async def stream_responses(client, kwargs: dict[str, Any], on_text, on_thinking=None) -> ModelResponse:
+    """Stream a Responses API call: text deltas -> on_text, reasoning summary deltas ->
+    on_thinking; the terminal event carries the full Response we map at the end."""
+    final = None
+    stream = await client.responses.create(**kwargs, stream=True)
+    async for event in stream:
+        if event.type == "response.output_text.delta":
+            on_text(event.delta)
+        elif event.type == "response.reasoning_summary_text.delta" and on_thinking is not None:
+            on_thinking(event.delta)
+        elif event.type in ("response.completed", "response.incomplete", "response.failed"):
+            final = event.response
+    if final is None:
+        raise RuntimeError("OpenAI stream ended without a final response")
+    return from_responses_response(final)
+
+
 class OpenAIProvider:
+    """Native OpenAI uses the Responses API: reasoning models reject function tools
+    on /v1/chat/completions. OpenAI-compatible gateways stay on Chat Completions."""
+
     name = "openai"
 
     def __init__(self, *, api_key: str | None = None, default_model: str | None = None):
@@ -182,6 +266,7 @@ class OpenAIProvider:
             raise RuntimeError("OPENAI_API_KEY not set")
         self._client = AsyncOpenAI(api_key=key, max_retries=1, timeout=60.0)
         self.default_model = default_model or os.environ.get("HEXHARNESS_OPENAI_MODEL", "gpt-4o")
+        self._no_reasoning: set[str] = set()  # models that rejected the `reasoning` param
 
     async def complete(
         self,
@@ -194,14 +279,37 @@ class OpenAIProvider:
         on_text=None,
         on_thinking=None,
     ) -> ModelResponse:
+        from openai import BadRequestError
+
+        model = model or self.default_model
+        # ponytail: store=False and no reasoning block type in providers/types.py, so
+        # reasoning items are not round-tripped (no include=["reasoning.encrypted_content"]);
+        # the model re-reasons each turn. Add a ReasoningBlock carrying encrypted_content
+        # if cross-turn reasoning quality/cost matters.
         kwargs: dict[str, Any] = {
-            "model": model or self.default_model,
-            "max_tokens": max_tokens,
-            "messages": to_openai_messages(messages, system),
+            "model": model,
+            "input": to_responses_input(messages),
+            "max_output_tokens": max_tokens,
+            "store": False,
         }
+        if system:
+            kwargs["instructions"] = system
         if tools:
-            kwargs["tools"] = tools_to_openai(tools)
-        if on_text is not None or on_thinking is not None:
-            return await stream_openai(self._client, kwargs, on_text or (lambda s: None), on_thinking)
-        resp = await self._client.chat.completions.create(**kwargs)
-        return from_openai_response(resp)
+            kwargs["tools"] = tools_to_responses(tools)
+        if model not in self._no_reasoning:
+            kwargs["reasoning"] = {"summary": "auto"}
+
+        async def call(kw):
+            if on_text is not None or on_thinking is not None:
+                return await stream_responses(self._client, kw, on_text or (lambda s: None), on_thinking)
+            return from_responses_response(await self._client.responses.create(**kw), on_thinking)
+
+        try:
+            return await call(kwargs)
+        except BadRequestError as e:
+            # Non-reasoning models (gpt-4o class) reject `reasoning`: remember and retry once.
+            if "reasoning" not in kwargs or "reasoning" not in str(e).lower():
+                raise
+            self._no_reasoning.add(model)
+            kwargs.pop("reasoning")
+            return await call(kwargs)
