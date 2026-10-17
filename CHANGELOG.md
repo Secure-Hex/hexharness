@@ -1,6 +1,23 @@
 # CHANGELOG
 
 
+## v1.5.1 (2026-10-17)
+
+### Bug Fixes
+
+- **deps**: Declare every runtime dependency as a hard dependency
+  ([`c4211ed`](https://github.com/Secure-Hex/hexharness/commit/c4211ede1dc48cf510696d107761ded80cb2cdec))
+
+A plain `pip install hexharness` now pulls every Python integration, so no feature crashes on a
+  missing module on a fresh install. Promotes all optional-dependencies groups into core and adds
+  three third-party imports that were undeclared everywhere: httpx (OAuth token refresh), rich (TUI
+  rendering), docx2pdf (DOCX->PDF report step). Only `dev` (pytest) stays an extra.
+
+weasyprint, sounddevice and playwright still require OS-level libraries pip cannot provide; stale
+  `hexharness[extra]` install hints in the README and in runtime messages (browser, voice,
+  web_search) are updated to say so.
+
+
 ## v1.5.0 (2026-10-16)
 
 ### Features
