@@ -2,8 +2,8 @@
 screenshots. Scope-sensitive: the Scope Guard checks the initial URL's host. Screenshots
 are written to the engagement workspace (on the host, so the operator can open them).
 
-Playwright is an optional dep ([browser]) and needs its browser installed:
-    pip install -U 'hexharness[browser]' && playwright install chromium
+Playwright ships as a core dep, but its browser binaries are an extra step:
+    playwright install chromium
 The browser session is injectable so tests run without a real browser.
 """
 from __future__ import annotations
@@ -56,7 +56,7 @@ class BrowserTool(Tool):
             result = await session(data.url, [s.model_dump() for s in data.steps],
                                    str(shot_path) if shot_path else None, data.timeout)
         except _MissingPlaywright:
-            return ("browser needs Playwright: pip install -U 'hexharness[browser]' && playwright install chromium")
+            return "browser needs its browser binaries: run `playwright install chromium`"
         except Exception as exc:  # noqa: BLE001 — surface, don't crash the turn
             return f"browser error: {exc}"
         lines = [f"{result.get('status', '?')} {data.url} — title: {result.get('title', '')}"]

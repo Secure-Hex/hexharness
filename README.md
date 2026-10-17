@@ -8,16 +8,18 @@ Scope Guard + ROE are hard gates and everything lands in the hash-chained audit 
 ## Install
 
 ```bash
-python -m venv venv && ./venv/bin/pip install -e '.[dev]'
-./venv/bin/pytest -q          # 252 passed, 3 skipped (optional-dep paths)
+python -m venv venv && ./venv/bin/pip install -e '.[dev]'   # drop [dev] for a runtime-only install
+./venv/bin/pytest -q
 ```
 
-Core + tests run with no optional dependency installed; every integration is lazy-imported.
+Every Python integration ships as a hard dependency, so a plain `pip install hexharness`
+pulls all of it — no extras to remember. Three features also need an OS-level step pip
+can't do (see [System dependencies](#system-dependencies)).
 
 ## Quickstart (TUI)
 
 ```bash
-./venv/bin/pip install -e '.[tui]'
+./venv/bin/pip install -e .
 ./venv/bin/python -m hexharness tui                 # start blank — describe a target to configure it
 ./venv/bin/python -m hexharness tui --engagement engagements/example.engagement.yaml
 ```
@@ -113,8 +115,7 @@ sandbox isolation, so it is explicit. Scanners keep ephemeral, hardened containe
 
 Out-of-band vault: a tool that needs a key (`shodan_host`, `github_dork`, paid web search,
 MCP servers) triggers an operator prompt; the value is stored and reused, **never** shown to
-the model or logged. With the `[secrets]` extra it persists **encrypted at rest** (Fernet,
-per engagement); without it, in-memory only.
+the model or logged. It persists **encrypted at rest** (Fernet, per engagement).
 
 ## Layout
 
@@ -136,14 +137,16 @@ hexharness/
   engagement.py  engagement.yaml -> control-plane objects     engine.py  composition root
 ```
 
-## Optional dependencies
+## System dependencies
+
+All Python packages install automatically. Three features additionally need OS-level
+pieces pip cannot provide:
 
 ```bash
-./venv/bin/pip install -e '.[all]'   # everything
-# or pick: tui / openai / google / otel / daemon / reporting / mcp / browser / secrets / voice
+./venv/bin/playwright install chromium   # browser tool: browser binaries
+# weasyprint (PDF reports): libpango + libcairo   -> apt install libpango-1.0-0 libpangocairo-1.0-0
+# voice dictation:          PortAudio             -> apt install libportaudio2
 ```
-
-`browser` also needs `./venv/bin/playwright install chromium`.
 
 ## Known ceilings (marked `ponytail:` in code)
 

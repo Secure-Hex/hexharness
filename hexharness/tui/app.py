@@ -868,8 +868,8 @@ class HexTUI(App):
         from hexharness.voice.dictation import Dictation
 
         if not Dictation.available():
-            self._log("voice not available — pip install -U 'hexharness[voice]' "
-                      "(also needs the PortAudio system lib, e.g. apt install libportaudio2)", _WARNING)
+            self._log("voice not available — needs the PortAudio system lib "
+                      "(e.g. apt install libportaudio2)", _WARNING)
             return
         if self._dictation is None:
             self._dictation = Dictation()

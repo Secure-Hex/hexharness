@@ -43,4 +43,4 @@ async def test_missing_playwright_message(tmp_path):
         raise _MissingPlaywright
 
     out = await BrowserTool(tmp_path, session_fn=no_pw).run({"url": "https://app.acme.example"})
-    assert "pip install" in out and "playwright install chromium" in out
+    assert "playwright install chromium" in out

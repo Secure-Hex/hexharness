@@ -15,36 +15,40 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Operating System :: POSIX :: Linux",
 ]
+# Every runtime third-party import the package makes is a hard dependency: a plain
+# `pip install hexharness` pulls everything, so no feature crashes on a missing module.
+# NOTE: weasyprint (libpango/libcairo), sounddevice (PortAudio) and playwright (browser
+# binaries, via `playwright install chromium`) also need SYSTEM libraries that pip cannot
+# provide; those are an OS-level step, not a Python dependency.
 dependencies = [
     "pydantic>=2.6",
     "anthropic>=0.40",
+    "openai>=1.40",          # OpenAI provider + OllamaProvider (OpenAI-compatible endpoint)
+    "google-genai>=0.3",     # Google provider
+    "httpx>=0.27",           # OAuth token refresh (providers/openai_oauth.py)
     "pyyaml>=6",
-    "ddgs>=6.0",  # free default web_search backend (Tavily/Exa optional, via stdlib HTTP + key)
-    "dnspython>=2.6",  # native dns_enum resolver (no sandbox tool needed)
+    "ddgs>=6.0",             # default web_search backend
+    "dnspython>=2.6",        # native dns_enum resolver
+    "textual>=0.60",         # TUI
+    "rich>=13",              # TUI rendering (markdown/text)
+    "jinja2>=3",             # report templating
+    "weasyprint>=60",        # HTML->PDF report (needs libpango/libcairo at runtime)
+    "docxtpl>=0.16",         # DOCX report templating
+    "docx2pdf>=0.1.8",       # DOCX->PDF report step
+    "mcp>=1.0",              # MCP tool transport
+    "websockets>=12",        # daemon transport
+    "opentelemetry-sdk>=1.20",  # observability
+    "cryptography>=42",      # at-rest Vault encryption (Fernet)
+    "playwright>=1.40",      # browser tool (needs `playwright install chromium` for binaries)
+    "sounddevice>=0.4",      # voice dictation capture (needs PortAudio at runtime)
+    "faster-whisper>=1.0",   # voice dictation transcription
+    "numpy>=1.26",           # voice dictation audio buffers
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
-]
-# Each group is lazy-imported; the core install and the test suite run without any of them.
-openai = ["openai>=1.40"]        # also powers OllamaProvider (OpenAI-compatible endpoint)
-google = ["google-genai>=0.3"]
-otel = ["opentelemetry-sdk>=1.20"]
-daemon = ["websockets>=12"]
-reporting = ["jinja2>=3", "weasyprint>=60", "docxtpl>=0.16"]
-mcp = ["mcp>=1.0"]
-tui = ["textual>=0.60"]
-browser = ["playwright>=1.40"]  # browser tool; run `playwright install chromium` after
-secrets = ["cryptography>=42"]  # optional: encrypts the on-disk Vault at rest (Fernet); without it the vault stays in-memory
-voice = ["sounddevice>=0.4", "faster-whisper>=1.0", "numpy>=1.26"]
-search = ["ddgs>=6.0"]  # kept for back-compat; ddgs is now a core dep so web_search works out of the box
-all = [
-    "openai>=1.40", "google-genai>=0.3", "opentelemetry-sdk>=1.20",
-    "websockets>=12", "jinja2>=3", "weasyprint>=60", "docxtpl>=0.16", "mcp>=1.0",
-    "textual>=0.60", "sounddevice>=0.4", "faster-whisper>=1.0", "numpy>=1.26", "ddgs>=6.0",
-    "cryptography>=42",
 ]
 
 [project.urls]
