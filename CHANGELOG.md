@@ -1,6 +1,19 @@
 # CHANGELOG
 
 
+## v1.6.1 (2026-10-18)
+
+### Bug Fixes
+
+- **agent**: Cap tool output sent to the model
+  ([`c31b13f`](https://github.com/Secure-Hex/hexharness/commit/c31b13fcbeea838c9bc8bb15e88a8860cc5cc375))
+
+A large tool result (e.g. cat of a multi-MB file) was sent to the provider in full and rejected:
+  OpenAI Responses limits an input string to 10 MB (error string_above_max_length). Cap the model
+  copy at 200 KB keeping head + tail with an elision notice; the full output still lands in
+  /workspace. The 2000-char cap already applied only to the TUI/event copy.
+
+
 ## v1.6.0 (2026-10-18)
 
 ### Bug Fixes
