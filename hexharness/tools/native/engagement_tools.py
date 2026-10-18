@@ -18,7 +18,9 @@ class EngagementDraftTool(Tool):
         "engagement.yaml to disk and returns it for HUMAN review. Drafting does NOT activate "
         "it — a human must confirm before any session runs under it. Fill scope.domains/cidrs, "
         "scope.exclusions, roe.max_risk (passive|active|intrusive|destructive), roe.max_autonomy "
-        "(plan|report|interactive|auto|bypass), roe.max_phase, and any time windows/budget."
+        "(plan|report|interactive|auto|bypass), roe.max_phase, and any time windows. Leave "
+        "every budget field (max_tokens, max_usd, max_seconds) null unless the operator "
+        "explicitly asked for that limit — a guessed cap silently blocks the session later."
     )
     input_model = EngagementSpec
     risk_level = RiskLevel.PASSIVE  # writes an inert draft file; nothing executes under it
