@@ -38,7 +38,7 @@ class _FakeExecutor:
     def __init__(self):
         self.calls = []
 
-    async def exec_in_session(self, image, argv, *, timeout=None, workspace=None, hardware=False):
+    async def exec_in_session(self, image, argv, *, timeout=None, workspace=None, hardware=False, host_network=False):
         self.calls.append((image, argv, timeout, workspace))
         return SandboxResult(0, "fake-out", "")
 

@@ -15,7 +15,7 @@ class _FakeExecutor:
         self.calls: list[list[str]] = []
         self.result = result or SandboxResult(0, "out", "")
 
-    async def exec_in_session(self, image, argv, *, timeout=None, workspace=None, hardware=False):
+    async def exec_in_session(self, image, argv, *, timeout=None, workspace=None, hardware=False, host_network=False):
         self.calls.append(argv)
         return self.result
 

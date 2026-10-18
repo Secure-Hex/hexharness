@@ -57,6 +57,10 @@ class Engagement(BaseModel):
     # session container (USB-UART, WiFi monitor mode, etc.). Trades sandbox isolation
     # (adds --privileged --net=host) for hardware access, so it's OFF by default.
     hardware_access: bool = False
+    # Share the host network namespace with the sandbox (--network host) so it reaches
+    # whatever the host reaches — e.g. a lab on its own Docker network the default bridge
+    # can't see. Same network access as your machine, without privileged/USB. OFF by default.
+    host_network: bool = False
 
     @classmethod
     def load(cls, path: str | Path) -> "Engagement":

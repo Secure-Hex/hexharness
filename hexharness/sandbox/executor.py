@@ -54,7 +54,7 @@ class SandboxExecutor:
         return f"hexharness-{base}"
 
     async def _ensure_session(self, image: str, workspace: str | Path | None,
-                              hardware: bool = False) -> str:
+                              hardware: bool = False, host_network: bool = False) -> str:
         if not self.available():
             raise SandboxError("docker not found on PATH")
         if self._session_container is not None:
@@ -87,9 +87,15 @@ class SandboxExecutor:
         # USB-UART gadgets and WiFi monitor-mode (aircrack) work. This needs host net
         # (wireless ifaces live in the host netns), the USB bus, and privileged (monitor
         # mode / rfkill / raw device ioctls). It DROPS the sandbox isolation — opt-in only.
+        # host_network: share the host network namespace so the sandbox reaches whatever the
+        # host reaches (e.g. a lab on its own Docker network) — same access as the host, no
+        # privileged/USB. hardware implies it and adds the device passthrough on top.
         if hardware:
             net = ["--network", "host"]
             hw = ["--privileged", "-v", "/dev/bus/usb:/dev/bus/usb", "-v", "/dev:/dev"]
+        elif host_network:
+            net = ["--network", "host"]
+            hw = []
         else:
             net = ["--network", "bridge"]
             hw = []
@@ -109,8 +115,9 @@ class SandboxExecutor:
     async def exec_in_session(self, image: str, argv: list[str], *,
                               timeout: float | None = None,
                               workspace: str | Path | None = None,
-                              hardware: bool = False) -> SandboxResult:
-        name = await self._ensure_session(image, workspace, hardware)
+                              hardware: bool = False,
+                              host_network: bool = False) -> SandboxResult:
+        name = await self._ensure_session(image, workspace, hardware, host_network)
         cmd = [self.docker_bin, "exec", "-w", "/workspace", name, *argv]
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)

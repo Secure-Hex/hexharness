@@ -13,7 +13,7 @@ from hexharness.tools.base import RiskLevel, Tool
 
 class ExecCommandInput(BaseModel):
     argv: list[str] = Field(description="Command and args as a list (no shell), e.g. ['id']")
-    network: str = Field(default="bridge", description="(informational) the session container is always on the bridge network")
+    network: str = Field(default="bridge", description="(informational) session container network is set by the engagement (bridge, or host when host_network/hardware_access is on)")
     timeout: int = Field(default=60, description="Seconds before the container is killed")
 
 
@@ -29,11 +29,12 @@ class ExecCommandTool(Tool):
     requires_approval = True
 
     def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "hexharness/kali:latest",
-                 workspace: str | None = None, hardware: bool = False):
+                 workspace: str | None = None, hardware: bool = False, host_network: bool = False):
         self.executor = executor or SandboxExecutor()
         self.image = image
         self.workspace = workspace  # mounted at /workspace; files persist on the host
         self.hardware = hardware    # pass host USB + wireless into the container (opt-in)
+        self.host_network = host_network  # share host netns (reach the host's lab networks)
 
     async def run(self, tool_input: dict) -> str:
         argv = tool_input["argv"]
@@ -46,6 +47,7 @@ class ExecCommandTool(Tool):
                 timeout=tool_input.get("timeout", 60),
                 workspace=self.workspace,
                 hardware=self.hardware,
+                host_network=self.host_network,
             )
         except SandboxError as e:
             return f"sandbox unavailable: {e}"

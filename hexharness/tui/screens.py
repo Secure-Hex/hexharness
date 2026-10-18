@@ -806,6 +806,10 @@ class EngagementEditScreen(ModalScreen[dict]):
                                "(privileged + host net; DROPS isolation)",
                                value=bool(self._data.get("hardware_access", False)),
                                id="eng-hardware")
+                yield Checkbox("Host network — sandbox shares the host network "
+                               "(--network host; reach labs on their own Docker network)",
+                               value=bool(self._data.get("host_network", False)),
+                               id="eng-host-net")
             with Horizontal(id="scope-edit-buttons"):
                 yield Button("Apply", variant="primary", id="scope-apply-btn")
                 yield Button("Cancel", id="scope-edit-cancel-btn")
@@ -909,6 +913,7 @@ class EngagementEditScreen(ModalScreen[dict]):
         data["report_template"] = self.query_one("#eng-report", Input).value.strip()
         data["sandbox_image"] = self.query_one("#eng-sandbox", Input).value.strip() or "kalilinux/kali-rolling"
         data["hardware_access"] = self.query_one("#eng-hardware", Checkbox).value
+        data["host_network"] = self.query_one("#eng-host-net", Checkbox).value
         self.dismiss(data)
 
     # --- interaction (one dispatcher keeps the per-button @on handlers from double-firing) ---

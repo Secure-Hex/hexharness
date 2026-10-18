@@ -71,16 +71,18 @@ def _fmt(result, secrets: list[str] = ()) -> str:
 
 class _GitTool(Tool):
     def __init__(self, executor: SandboxExecutor | None = None, *, image: str = "hexharness/kali:latest",
-                 workspace: str | None = None, hardware: bool = False, vault=None):
+                 workspace: str | None = None, hardware: bool = False, host_network: bool = False, vault=None):
         self.executor = executor or SandboxExecutor()
         self.image = image
         self.workspace = workspace
         self.hardware = hardware  # must match exec_command: whoever starts the container sets it
+        self.host_network = host_network  # likewise — same session container, same netns
         self.vault = vault
 
     async def _exec(self, argv: list[str], timeout: int):
         return await self.executor.exec_in_session(
-            self.image, argv, timeout=timeout, workspace=self.workspace, hardware=self.hardware)
+            self.image, argv, timeout=timeout, workspace=self.workspace,
+            hardware=self.hardware, host_network=self.host_network)
 
 
 # --------------------------------------------------------------------- git_clone --

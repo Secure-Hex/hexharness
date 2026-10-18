@@ -66,6 +66,7 @@ class EngagementSpec(BaseModel):
     max_iterations: int = Field(default=12, ge=1)  # max tool-call rounds per turn
     sandbox_image: str = "hexharness/kali:latest"
     hardware_access: bool = False  # pass host USB + wireless into the sandbox (opt-in)
+    host_network: bool = False  # share host netns (--network host): reach the host's lab networks
 
     # Tolerate models that pass a nested object as a JSON string (see _coerce_json).
     _parse_nested = field_validator("scope", "roe", "budget", mode="before")(_coerce_json)

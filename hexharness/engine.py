@@ -91,11 +91,13 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     reg.register(FileWriteTool(workspace))
     # command execution, sandboxed (DESTRUCTIVE + approval)
     reg.register(ExecCommandTool(executor, image=sandbox_image, workspace=str(workspace),
-                                 hardware=bool(getattr(engagement, "hardware_access", False))))
+                                 hardware=bool(getattr(engagement, "hardware_access", False)),
+                                 host_network=bool(getattr(engagement, "host_network", False))))
     # git in the same session container (cloned repos are untrusted): clone/pull is
     # ACTIVE + approval (network); inspection is PASSIVE, no approval.
     git_kw = dict(image=sandbox_image, workspace=str(workspace),
-                  hardware=bool(getattr(engagement, "hardware_access", False)), vault=vault)
+                  hardware=bool(getattr(engagement, "hardware_access", False)),
+                  host_network=bool(getattr(engagement, "host_network", False)), vault=vault)
     reg.register(GitCloneTool(executor, **git_kw))
     reg.register(GitRepoTool(executor, **git_kw))
     # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
@@ -277,6 +279,7 @@ class Engine:
         if exec_tool is not None and hasattr(exec_tool, "image"):
             exec_tool.image = engagement.sandbox_image
             exec_tool.hardware = bool(getattr(engagement, "hardware_access", False))
+            exec_tool.host_network = bool(getattr(engagement, "host_network", False))
         report_tool = self.registry.get("generate_report")
         if report_tool is not None and hasattr(report_tool, "engagement"):
             report_tool.engagement = engagement  # report header follows the new scope
