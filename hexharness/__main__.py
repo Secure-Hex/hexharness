@@ -130,6 +130,12 @@ def _parser() -> argparse.ArgumentParser:
 
     sub.add_parser("build-image", help="build the HexHarness sandbox image (Kali + tools)")
 
+    lg = sub.add_parser("login", help="sign in to a provider (OpenAI via ChatGPT OAuth)")
+    lg.add_argument("provider", choices=["openai"], nargs="?", default="openai")
+    lg.add_argument("--manual", action="store_true",
+                    help="headless: print the URL and read the pasted redirect (SSH/Docker)")
+    lg.add_argument("--logout", action="store_true", help="delete the stored tokens instead")
+
     v = sub.add_parser("verify", help="verify a session's audit log (SHA-256 hash chain) for tampering")
     v.add_argument("--engagement", default="engagements/example.engagement.yaml")
 
@@ -200,7 +206,7 @@ def _notify_update() -> None:
 
 def main() -> int:
     argv = sys.argv[1:]
-    _subcommands = ("run", "init", "tui", "build-image", "verify", "report",
+    _subcommands = ("run", "init", "tui", "build-image", "verify", "report", "login",
                     "-h", "--help", "--version")
     if argv and argv[0] not in _subcommands:
         argv = ["run", *argv]  # back-compat: bare prompt => run
@@ -211,6 +217,22 @@ def main() -> int:
 
     if args.cmd == "verify":
         print(_verify(args))
+        return 0
+
+    if args.cmd == "login":
+        from hexharness.providers import openai_login
+
+        if args.logout:
+            print("logged out" if openai_login.logout() else "no stored OpenAI tokens")
+            return 0
+        try:
+            store = openai_login.login(manual=args.manual)
+        except Exception as exc:  # noqa: BLE001 — surface the login failure cleanly
+            print(f"login failed: {exc}", file=sys.stderr)
+            return 1
+        acct = store.get("account_id") or "(no account id)"
+        print(f"signed in to OpenAI (ChatGPT) — account {acct}\n"
+              f"tokens stored at {openai_login.auth_store_path()}")
         return 0
 
     if args.cmd == "build-image":

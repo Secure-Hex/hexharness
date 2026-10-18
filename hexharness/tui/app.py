@@ -739,7 +739,11 @@ class HexTUI(App):
         self.engagement_path = path
         self.engine = None
         self.loop = None
-        self._ensure_engine()
+        try:
+            self._ensure_engine()
+        except RuntimeError as exc:
+            # Don't let an engine-build error (bad engagement file, etc.) crash the UI.
+            self._log(f"could not rebuild engine: {exc}", _WARNING)
 
     def _engagement_file(self, name: str) -> str:
         """Where a newly-configured engagement is written when launched blank."""

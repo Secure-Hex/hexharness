@@ -45,8 +45,8 @@ CATALOG: list[ProviderEntry] = [
     ProviderEntry("openai", "OpenAI", ("OPENAI_API_KEY",),
                   "HEXHARNESS_OPENAI_MODEL", "gpt-4o",
                   "hexharness.providers.openai", "OpenAIProvider", cost=(2.5, 10.0)),
-    # ChatGPT subscription via Codex OAuth tokens (~/.codex/auth.json). No API key / env;
-    # configured when the operator is logged into Codex. $0 marginal cost (subscription).
+    # ChatGPT subscription via HexHarness's own "Sign in with ChatGPT" OAuth. No API key /
+    # env; configured once the operator runs `hexharness login openai`. $0 marginal cost.
     ProviderEntry("openai-oauth", "OpenAI (ChatGPT login)", (),
                   "HEXHARNESS_OPENAI_OAUTH_MODEL", "gpt-5.6-sol",
                   "hexharness.providers.openai_oauth", "OpenAIOAuthProvider",
