@@ -155,7 +155,9 @@ class StdioMCPClient:
             await self.connect()
         result = await self._session.list_tools()
         return [
-            {"name": t.name, "description": t.description or "", "inputSchema": t.inputSchema or {}}
+            # mcp 2.x renamed Tool.inputSchema -> input_schema; accept both.
+            {"name": t.name, "description": t.description or "",
+             "inputSchema": getattr(t, "input_schema", None) or getattr(t, "inputSchema", None) or {}}
             for t in result.tools
         ]
 
