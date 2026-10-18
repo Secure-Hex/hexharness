@@ -1,6 +1,17 @@
 # CHANGELOG
 
 
+## v1.8.1 (2026-10-18)
+
+### Bug Fixes
+
+- **sandbox**: Install iproute2 in the Kali image
+  ([`3104560`](https://github.com/Secure-Hex/hexharness/commit/3104560925b3445ee39024df1e38a16f4be7efb5))
+
+The image shipped net-tools but not iproute2, so `ip` was missing (`ip: not found`). Add iproute2 so
+  address/route inspection works in the sandbox.
+
+
 ## v1.8.0 (2026-10-18)
 
 ### Features
