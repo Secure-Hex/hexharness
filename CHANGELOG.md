@@ -1,6 +1,71 @@
 # CHANGELOG
 
 
+## v1.6.0 (2026-10-18)
+
+### Bug Fixes
+
+- **mcp**: Read tool schema from input_schema (mcp 2.x) and inputSchema
+  ([`8ac0feb`](https://github.com/Secure-Hex/hexharness/commit/8ac0feb5f7ca2d9b6330e47ad2a12ea746c218cd))
+
+mcp 2.x renamed Tool.inputSchema to input_schema; accept either so listing tools keeps working
+  across SDK versions.
+
+- **sandbox**: Sanitize session container names to ASCII
+  ([`779f9fe`](https://github.com/Secure-Hex/hexharness/commit/779f9fe144815229d06a2b1c3e07684078580a74))
+
+Workspace paths with accents (e.g. "análisis") produced Docker names outside [a-zA-Z0-9_.-];
+  NFKD-normalize and slug the base so the long-lived session container always gets a valid name.
+
+### Chores
+
+- **deps**: Add uv.lock
+  ([`3ba3961`](https://github.com/Secure-Hex/hexharness/commit/3ba396112c5f71826af50841e1f337e40adf129c))
+
+- **engagements**: Sync unconfigured template with current schema
+  ([`e9ca10c`](https://github.com/Secure-Hex/hexharness/commit/e9ca10cd36f8b8fab9cc5ffe34749957e5e3f01d))
+
+Add max_iterations, hardware_access and host_network fields to the sample engagement so a fresh
+  draft shows every current option.
+
+### Documentation
+
+- **agent**: Rewrite DEFAULT_SYSTEM operating prompt
+  ([`f9a3980`](https://github.com/Secure-Hex/hexharness/commit/f9a3980b2fbd0cc635bb7644084d46d1a880e1e8))
+
+Restructure into Control plane / Tools / Sandbox / Browser sections: document the gate order and
+  DENIED shape, that tool schemas attached per request are the source of truth, session-container
+  state persistence, and the dedicated tools to prefer over raw exec_command.
+
+### Features
+
+- **engagement**: Keep budget caps null unless the operator sets them
+  ([`8ed1579`](https://github.com/Secure-Hex/hexharness/commit/8ed1579fdbff477f40069ef350c9dab1a96ff4fd))
+
+Guide the draft tool to leave max_tokens/max_usd/max_seconds null unless explicitly asked — a
+  guessed cap silently blocks the session later.
+
+- **sandbox**: Add host_network engagement flag for host network access
+  ([`fa0c299`](https://github.com/Secure-Hex/hexharness/commit/fa0c299a685ee73e3a8694bc963d6eb55d2f1e0d))
+
+Share the host network namespace with the sandbox (--network host) so it reaches whatever the host
+  reaches — e.g. a lab on its own Docker network the default bridge can't see. Same network access
+  as the host, without hardware_access's privileged/USB passthrough. Off by default; exposed in the
+  schema, the engagement builder and the TUI.
+
+- **tools**: Add git_clone and git_repo repository tools
+  ([`d5983fd`](https://github.com/Secure-Hex/hexharness/commit/d5983fd64ed18c218fc4c73912d9093005dc78d3))
+
+Clone and inspect untrusted repos inside the session container (clone/pull ACTIVE + approval;
+  log/grep/blame/history_search PASSIVE). Registered in the default registry alongside exec_command.
+
+- **tui**: Add /clear to reset the conversation
+  ([`ba994ed`](https://github.com/Secure-Hex/hexharness/commit/ba994ed0ac3d70da86139c259c58784033f89fc3))
+
+Forget the model conversation while keeping the engagement, scope, findings, events and workspace;
+  clears the saved session so a reopen starts fresh.
+
+
 ## v1.5.1 (2026-10-17)
 
 ### Bug Fixes
