@@ -92,8 +92,17 @@ async def _init(args) -> str:
     return await engine.loop(provider=provider, model=args.model).run(args.task)
 
 
+def _version() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        return version("hexharness")
+    except PackageNotFoundError:  # running from a source checkout without an install
+        return "unknown"
+
+
 def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="hexharness")
+    p.add_argument("--version", action="version", version=f"hexharness {_version()}")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def _common(sp):
@@ -191,7 +200,8 @@ def _notify_update() -> None:
 
 def main() -> int:
     argv = sys.argv[1:]
-    _subcommands = ("run", "init", "tui", "build-image", "verify", "report", "-h", "--help")
+    _subcommands = ("run", "init", "tui", "build-image", "verify", "report",
+                    "-h", "--help", "--version")
     if argv and argv[0] not in _subcommands:
         argv = ["run", *argv]  # back-compat: bare prompt => run
     args = _parser().parse_args(argv)
