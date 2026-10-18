@@ -22,7 +22,7 @@ class ExecCommandTool(Tool):
     description = ("Run a command inside the Docker sandbox (cwd /workspace, shared with "
                    "file_read/file_write and persisted on the host). Requires approval.")
     input_model = ExecCommandInput
-    # INTRUSIVE, not DESTRUCTIVE: it runs in a throwaway container (can't harm the host).
+    # INTRUSIVE, not DESTRUCTIVE: it runs in the session container (can't harm the host).
     # Still requires approval — it is NOT scope-sensitive, so it can reach out over the network.
     risk_level = RiskLevel.INTRUSIVE
     scope_sensitive = False

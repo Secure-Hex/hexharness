@@ -1,14 +1,17 @@
 """Docker-backed sandbox. Shells out to the docker CLI (no SDK dependency).
 
-Tools run in a throwaway container, hardened by default (no new privileges, all caps
-dropped, pid/memory limits). argv is passed as a list — never a shell string — so tool
+exec_command reuses one long-lived container per session (`docker exec`); other tools
+run in a throwaway container, hardened by default (no new privileges, all caps dropped,
+pid/memory limits). argv is passed as a list — never a shell string — so tool
 inputs cannot inject a command. Network is opt-in per call because a scanner needs it
 but a parser does not.
 """
 from __future__ import annotations
 
 import asyncio
+import re
 import shutil
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,6 +48,9 @@ class SandboxExecutor:
 
     def _session_name(self, workspace: str | Path | None) -> str:
         base = Path(workspace).parent.name if workspace else "default"
+        # Docker names must be ASCII [a-zA-Z0-9_.-]; the slug may keep accents ("análisis").
+        base = unicodedata.normalize("NFKD", base).encode("ascii", "ignore").decode()
+        base = re.sub(r"[^a-zA-Z0-9_.-]", "-", base) or "default"
         return f"hexharness-{base}"
 
     async def _ensure_session(self, image: str, workspace: str | Path | None,
