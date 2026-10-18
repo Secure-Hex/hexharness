@@ -36,6 +36,7 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     from hexharness.tools.native.exec import ExecCommandTool
     from hexharness.tools.native.extend import McpConnectTool, SkillInstallTool
     from hexharness.tools.native.fs import FileReadTool, FileWriteTool
+    from hexharness.tools.native.git import GitCloneTool, GitRepoTool
     from hexharness.tools.native.binary import BinaryInfoTool, ChecksecTool, DisassembleTool
     from hexharness.tools.native.browser import BrowserTool
     from hexharness.tools.native.postman import PostmanListTool, PostmanRunTool
@@ -91,6 +92,12 @@ def default_registry(*, vault=None, secret_requester=None, workspace: str | Path
     # command execution, sandboxed (DESTRUCTIVE + approval)
     reg.register(ExecCommandTool(executor, image=sandbox_image, workspace=str(workspace),
                                  hardware=bool(getattr(engagement, "hardware_access", False))))
+    # git in the same session container (cloned repos are untrusted): clone/pull is
+    # ACTIVE + approval (network); inspection is PASSIVE, no approval.
+    git_kw = dict(image=sandbox_image, workspace=str(workspace),
+                  hardware=bool(getattr(engagement, "hardware_access", False)), vault=vault)
+    reg.register(GitCloneTool(executor, **git_kw))
+    reg.register(GitRepoTool(executor, **git_kw))
     # runtime extensibility, model-driven (both ACTIVE/INTRUSIVE + approval)
     reg.register(SkillInstallTool(skills, library, global_dir=global_skills, project_dir=project_skills))
     reg.register(McpConnectTool(reg, vault, secret_requester))
