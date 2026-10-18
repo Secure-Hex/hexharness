@@ -1,6 +1,27 @@
 # CHANGELOG
 
 
+## v1.8.0 (2026-10-18)
+
+### Features
+
+- **providers**: Native Sign in with ChatGPT OAuth, drop Codex dependency
+  ([`d08d43f`](https://github.com/Secure-Hex/hexharness/commit/d08d43f7f784b52880733bbab8d64f20848a1c40))
+
+HexHarness now runs the OAuth authorization-code + PKCE login itself and owns the tokens in its own
+  data dir (~/.local/share/hexharness/openai_oauth.json, 0600), instead of borrowing
+  ~/.codex/auth.json. No Codex CLI required.
+
+- openai_login: PKCE S256, loopback callback on :1455 (or --manual paste for headless/SSH/Docker),
+  token exchange + in-place refresh against auth.openai.com, using the public Codex client_id (no
+  app registration, no API key). - openai_oauth provider reads the new store; account_id from the
+  id_token. - CLI: `hexharness login openai [--manual] [--logout]`. - TUI detects via the new store
+  and no longer crashes applying a scope change when the selected provider can't be built.
+
+BREAKING: operators previously relying on Codex tokens must run `hexharness login openai` once;
+  ~/.codex is no longer read.
+
+
 ## v1.7.0 (2026-10-18)
 
 ### Features
