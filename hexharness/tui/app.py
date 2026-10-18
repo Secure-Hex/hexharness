@@ -97,7 +97,7 @@ class HexTUI(App):
         ("Ctrl+Q", "Quit"),
         ("Select", "Drag to select text · Ctrl+C copies it (Shift+drag for terminal-native)"),
         ("Enter", "Run the prompt  ·  Ctrl+J: newline"),
-        ("/name", "Invoke a skill  ·  /compact · /save · /: list"),
+        ("/name", "Invoke a skill  ·  /clear · /compact · /save · /: list"),
         ("Session", "Auto-saves each turn & on quit; resumes on reopening the engagement"),
         ("↑/↓, Tab", "Navigate & complete slash suggestions"),
     ]
@@ -261,7 +261,7 @@ class HexTUI(App):
 
     def _slash_matches(self, prefix: str) -> list[str]:
         names = sorted(n for n in list_skills(self._skill_registry()) if n.lower().startswith(prefix.lower()))
-        for cmd in ("compact", "save"):  # built-in commands shown alongside skills
+        for cmd in ("clear", "compact", "save"):  # built-in commands shown alongside skills
             if cmd.startswith(prefix.lower()):
                 names.append(cmd)
         return names
@@ -421,6 +421,26 @@ class HexTUI(App):
 
             sess.save_conversation(self._eng_name, self.loop.conversation)
 
+    def _clear_conversation(self) -> None:
+        """Forget the model conversation but keep the engagement, scope, findings,
+        events and workspace — a fresh chat on the same engagement."""
+        if self._turn_running:
+            self._log("a turn is running — wait for it or Ctrl+X to cancel, then /clear", _MUTED)
+            return
+        # Drop history held for a pending loop rebuild (provider switch / resume) too.
+        self._saved_conversation = self._resume_conv = None
+        self._saved_tokens = 0
+        if self.loop is not None:
+            self.loop.conversation = []
+            self.loop.last_input_tokens = 0
+        if self._eng_name:  # otherwise a reopen would resume the old chat
+            from hexharness import session as sess
+
+            sess.save_conversation(self._eng_name, [])
+        self.action_clear()
+        self._log("conversation cleared — same engagement, scope and findings", _SUCCESS)
+        self._sync_header()
+
     def _set_status(self, text: str, style: str = _MUTED) -> None:
         self.query_one("#status", Static).update(Text(text, style=style))
 
@@ -491,6 +511,9 @@ class HexTUI(App):
 
         if prompt in ("/compact", "/compact "):
             self._compact()
+            return
+        if prompt in ("/clear", "/clear "):
+            self._clear_conversation()
             return
         if prompt in ("/save", "/save "):
             self._save_session()
