@@ -14,4 +14,10 @@ budget:
   max_usd: null
   max_seconds: null
 report_template: default.html.j2
+max_iterations: 12
 sandbox_image: hexharness/kali:latest
+hardware_access: false
+# Share the host network with the sandbox (--network host) so it reaches a lab on its
+# own Docker network. Same network access as your machine. Set true when the sandbox
+# must see containers/hosts the default bridge can't.
+host_network: false
