@@ -1,6 +1,17 @@
 # CHANGELOG
 
 
+## v1.7.0 (2026-10-18)
+
+### Features
+
+- **cli**: Add --version flag
+  ([`d830d88`](https://github.com/Secure-Hex/hexharness/commit/d830d8884474280981a7c0c93eb673ff43d65c6b))
+
+`hexharness --version` prints the installed package version and exits. Added to the back-compat
+  passthrough list so the bare-prompt shim doesn't reroute it into the run subparser.
+
+
 ## v1.6.1 (2026-10-18)
 
 ### Bug Fixes
