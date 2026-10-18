@@ -67,6 +67,24 @@ DEFAULT_SYSTEM = (
     "saves screenshots to the workspace. Never install Playwright via exec_command."
 )
 
+# Max chars of a single tool result sent to the model. Well under provider per-string
+# limits (OpenAI Responses: 10 MB) with headroom for multibyte. A scanner/`cat` can emit
+# tens of MB; the model only needs the head and tail to reason, and the full output stays
+# on disk in /workspace.
+MAX_TOOL_OUTPUT_CHARS = 200_000
+
+
+def _cap_tool_output(output: str, limit: int = MAX_TOOL_OUTPUT_CHARS) -> str:
+    """Return output unchanged if small, else head + a notice + tail."""
+    if len(output) <= limit:
+        return output
+    half = limit // 2
+    elided = len(output) - 2 * half
+    return (f"{output[:half]}\n\n"
+            f"[... {elided} chars elided by HexHarness — tool output exceeded "
+            f"{limit} chars; full output is on disk in /workspace ...]\n\n"
+            f"{output[-half:]}")
+
 
 class AgentLoop:
     def __init__(
@@ -228,11 +246,14 @@ class AgentLoop:
         await self.events.append(EventType.TOOL_STARTED, {"tool": tool.name, "input": tu.input})
         try:
             output = await tool.run(tu.input)
-            # ponytail: truncate the copy stored in the event/shown in the TUI; the model
-            # still gets the full output via the ToolResultBlock below.
+            # Cap what the MODEL receives: providers reject oversized tool results (OpenAI
+            # Responses rejects >10 MB per input string), and a huge dump is useless to the
+            # model anyway. Keep the head + tail so it still sees how the output ended.
+            model_output = _cap_tool_output(output)
+            # ponytail: truncate the copy stored in the event/shown in the TUI too.
             await self.events.append(EventType.TOOL_FINISHED,
                                      {"tool": tool.name, "ok": True, "output": output[:2000]})
-            return ToolResultBlock(tool_use_id=tu.id, content=output)
+            return ToolResultBlock(tool_use_id=tu.id, content=model_output)
         except Exception as exc:  # noqa: BLE001
             await self.events.append(EventType.TOOL_FINISHED, {"tool": tool.name, "ok": False, "error": str(exc)})
             return ToolResultBlock(tool_use_id=tu.id, content=f"tool error: {exc}", is_error=True)
